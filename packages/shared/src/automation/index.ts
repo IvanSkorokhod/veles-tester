@@ -13,8 +13,9 @@ export interface BacktestExecutionRequest {
 }
 
 export interface CapturedArtifactRef {
-  artifactType: "screenshot" | "html-snapshot" | "network-log" | "trace" | "raw-payload";
+  artifactType: "screenshot" | "html-snapshot" | "network-log" | "trace" | "raw-payload" | "metrics-json";
   storageRef: string;
+  mimeType: string;
   stepName?: string;
 }
 

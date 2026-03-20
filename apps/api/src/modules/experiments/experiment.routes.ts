@@ -1,9 +1,19 @@
 import type { FastifyPluginAsync } from "fastify";
 
-export const experimentRoutes: FastifyPluginAsync = async (app) => {
-  app.post("/experiments", async (_request, reply) => {
-    return reply.code(501).send({
-      message: "TODO: persist experiment definitions and enqueue experiment.create."
+import { readCreateExperimentBody, sendRouteError } from "../vertical-slice/vertical-slice.http.js";
+import type { VerticalSliceService } from "../vertical-slice/vertical-slice.service.js";
+
+export function buildExperimentRoutes(service: VerticalSliceService): FastifyPluginAsync {
+  return async (app) => {
+    app.post("/experiments", async (request, reply) => {
+      try {
+        const input = readCreateExperimentBody(request.body);
+        const createdExperiment = await service.createExperiment(input);
+
+        return reply.code(201).send(createdExperiment);
+      } catch (error) {
+        return sendRouteError(reply, error);
+      }
     });
-  });
-};
+  };
+}

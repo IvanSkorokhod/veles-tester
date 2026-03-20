@@ -2,7 +2,7 @@ import type { ParameterValue, TimestampedEntity } from "./common.js";
 
 export type ParameterValueType = "string" | "number" | "integer" | "boolean" | "enum";
 
-export type LocatorStrategy = "role" | "label" | "testId" | "css" | "xpath";
+export type LocatorStrategy = "role" | "label" | "testId" | "css" | "xpath" | "controlKey";
 
 export interface LocatorDescriptor {
   strategy: LocatorStrategy;

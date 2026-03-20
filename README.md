@@ -52,6 +52,8 @@ corepack enable
 cp .env.example .env
 ```
 
+Set `VELES_BASE_URL`, `VELES_LOGIN`, and `VELES_PASSWORD` in `.env` before creating real runs.
+
 3. Start PostgreSQL and Redis:
 
 ```bash
@@ -92,8 +94,9 @@ This runs:
 
 ## Notes
 
+- The first implemented vertical slice supports one fixed backtest workflow with two numeric parameters and one queued run per experiment.
 - The worker owns browser automation concerns.
 - Veles-specific selectors are intentionally isolated under `apps/worker/src/modules/veles-adapter`.
 - Shared domain types, job payloads, and schema contracts live under `packages/shared/src`.
-- Job processors intentionally throw TODO errors until business logic is implemented.
+- Veles selectors in `apps/worker/src/modules/veles-adapter/veles-selector-registry.ts` still require manual capture before live browser automation can succeed.
 - Update `docs/PROJECT_CONTEXT.md` first whenever implementation changes architecture or scope.

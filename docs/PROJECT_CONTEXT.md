@@ -911,18 +911,32 @@ Conventions:
 - Reason: The MVP needs real screenshot and snapshot capture without introducing an object-storage subsystem before the first browser flow is proven.
 - Consequences: Run artifacts will be written to a local artifacts directory, persisted by metadata, and remain a future portability concern until a more formal storage layer is introduced.
 
+### Entry 12
+
+- Date: 2026-03-20
+- Decision: The first executable experiment path will create exactly one run and enqueue `run.execute` directly from the API.
+- Reason: The MVP needs a real persisted execution slice before `experiment.create`, `experiment.expand`, and staged search policy are implemented.
+- Consequences: One experiment currently maps to one concrete parameter combination and one queued run; broader orchestration remains future work.
+
+### Entry 13
+
+- Date: 2026-03-20
+- Decision: Strategy template parameters in the first slice use logical control keys while live Playwright selectors remain isolated in worker-owned page objects and the selector registry.
+- Reason: The project requires declarative parameter schemas without leaking brittle Veles selectors into API, persistence, or shared domain logic.
+- Consequences: Template records remain stable across selector tweaks, while live browser connectivity still depends on manually capturing the correct Veles paths and selectors in the worker registry.
+
 ---
 
 ## 24. Open Questions
 
-- Which exact Veles workflow and strategy type will be supported first?
 - What exact normalized metric set will be considered mandatory for the first ranking implementation?
 - How should profitability and robustness be weighted in the first ranking profile?
 - Will the first release support only one Veles account per deployment, or multiple isolated account sessions?
 - What is the preferred secure approach for initial session bootstrap and storage?
-- Where should large artifacts live in the first implementation: database, filesystem, or object storage?
 - What concurrency limits are safe for one Veles account without causing instability?
 - How much template management belongs in the first UI release versus file-based management by developers?
+- What are the exact reviewed Veles selectors and path values for the first supported login page, backtest page, parameter inputs, run trigger, completion indicator, and metric fields?
+- What exact text and units does the live Veles UI use for net profit, trade count, and max drawdown on the first supported page so the parser can be confirmed against reality?
 
 ---
 
@@ -937,19 +951,25 @@ Conventions:
 - Shared domain model types, parameter schema contracts, job payload types, and ranking/parser interfaces now exist in `packages/shared`.
 - The API app skeleton, worker runtime skeleton, React frontend skeleton, Prisma schema draft, and environment example files now exist.
 - Dedicated placeholder modules now exist for the Veles adapter, discovery mode, result parsing, and ranking engine.
+- Prisma models and migration artifacts now exist for `StrategyTemplate`, `ParameterSpace`, `Experiment`, `ExperimentRun`, `RunArtifact`, and `BacktestResult` for the first executable slice.
+- API endpoints now exist for creating a strategy template, creating a parameter space, creating an experiment, listing runs, and reading run details.
+- The current experiment creation path now persists one experiment, creates one run, and enqueues `run.execute` directly.
+- The worker now implements a real `run.execute` plus `result.parse` path for one fixed backtest workflow, including browser session handling, page-object-driven automation flow, raw payload persistence, artifact capture, metric normalization, and result persistence.
+- The first supported schema now consists of two numeric parameters only: `take_profit_percent` and `stop_loss_percent`.
+- Local filesystem artifact storage is now implemented for screenshots, HTML snapshots, raw execution payload JSON, and normalized metrics JSON.
+- Root `.env` loading is now implemented in the API and worker apps, and the environment example now includes the Veles credentials/base URL needed for live runs.
 
 ### Not Done
 
-- No real Veles browser automation flow has been implemented yet.
-- No experiment persistence or API business workflow has been implemented yet.
-- No production-ready BullMQ job processing logic has been implemented yet.
-- No reviewed strategy templates or concrete parameter schemas have been implemented yet.
-- No result parsing or ranking logic has been implemented yet.
-- No discovery implementation exists beyond the module stub and shared contracts.
+- No broad discovery mode or automatic schema extraction has been implemented.
+- No staged optimization, experiment expansion, or multi-run orchestration has been implemented yet.
+- No ranking calculation or ranking snapshot workflow has been implemented yet.
+- The first live Veles selector/path set has not been captured yet, so the browser flow remains code-complete but not site-connected until those placeholders are replaced.
+- The current session handling still uses one filesystem-backed storage state path rather than a fuller persisted multi-session model.
 
 ### Immediate Next Step
 
-- Implement the first reviewed vertical slice for one fixed Veles backtest page workflow: create one template, one parameter space, one experiment, one queued run, one browser-driven execution path, raw result capture, artifact persistence, and normalized result persistence.
+- Capture and verify the real Veles login path, backtest path, parameter input selectors, run button selector, completion indicator, and metric selectors in `apps/worker/src/modules/veles-adapter/veles-selector-registry.ts`, then execute one live run end to end against the real page.
 
 ---
 

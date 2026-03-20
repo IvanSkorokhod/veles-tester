@@ -1,6 +1,12 @@
+export interface NormalizedBacktestMetrics {
+  netProfit: number | null;
+  tradeCount: number | null;
+  maxDrawdown: number | null;
+}
+
 export interface ParsedBacktestResult {
   rawPayload: Record<string, unknown>;
-  normalizedMetrics: Record<string, number | string | boolean | null>;
+  normalizedMetrics: NormalizedBacktestMetrics;
   parserVersion: string;
 }
 

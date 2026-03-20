@@ -10,7 +10,13 @@ export type ExperimentStatus =
 
 export type RunStatus = "pending" | "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
-export type ArtifactType = "screenshot" | "html-snapshot" | "network-log" | "trace" | "raw-payload";
+export type ArtifactType =
+  | "screenshot"
+  | "html-snapshot"
+  | "network-log"
+  | "trace"
+  | "raw-payload"
+  | "metrics-json";
 
 export type ParameterValue = string | number | boolean | null;
 

@@ -1,5 +1,5 @@
-import { Worker } from "bullmq";
-import { JOB_NAMES, QUEUE_NAMES } from "@veles/shared";
+import { Queue, Worker } from "bullmq";
+import { JOB_NAMES, QUEUE_NAMES, type ResultParseJobPayload } from "@veles/shared";
 
 import { loadWorkerEnv } from "./infrastructure/env.js";
 import { redisConnectionOptionsFromUrl } from "./infrastructure/redis.js";
@@ -9,23 +9,33 @@ import { RankingRecalculateProcessor } from "./jobs/processors/ranking-recalcula
 import { ResultParseProcessor } from "./jobs/processors/result-parse.processor.js";
 import { RunExecuteProcessor } from "./jobs/processors/run-execute.processor.js";
 import { processRunRetry } from "./jobs/processors/run-retry.processor.js";
-import { DiscoveryService } from "./modules/discovery/discovery.service.js";
+import { FilesystemArtifactStore } from "./modules/artifacts/filesystem-artifact-store.js";
 import { DefaultRankingEngine } from "./modules/ranking/default-ranking-engine.js";
 import { DefaultResultParser } from "./modules/result-parser/default-result-parser.js";
 import { PlaywrightVelesAdapter } from "./modules/veles-adapter/index.js";
+import { assertSelectorRegistryConfigured } from "./modules/veles-adapter/veles-selector-registry.js";
+
+assertSelectorRegistryConfigured();
 
 const env = loadWorkerEnv();
 const connection = redisConnectionOptionsFromUrl(env.redisUrl);
+const artifactStore = new FilesystemArtifactStore(env.artifactsDir);
+const resultPostprocessingQueue = new Queue<ResultParseJobPayload>(QUEUE_NAMES.resultPostprocessing, {
+  connection
+});
 
-const velesAdapter = new PlaywrightVelesAdapter(env.playwrightHeadless);
+const velesAdapter = new PlaywrightVelesAdapter({
+  baseUrl: env.velesBaseUrl,
+  login: env.velesLogin,
+  password: env.velesPassword,
+  headless: env.playwrightHeadless,
+  sessionStatePath: env.velesSessionStatePath,
+  artifactStore
+});
 const resultParser = new DefaultResultParser();
 const rankingEngine = new DefaultRankingEngine();
-const discoveryService = new DiscoveryService(velesAdapter);
-
-void discoveryService;
-
-const runExecuteProcessor = new RunExecuteProcessor(velesAdapter);
-const resultParseProcessor = new ResultParseProcessor(resultParser);
+const runExecuteProcessor = new RunExecuteProcessor(velesAdapter, artifactStore, resultPostprocessingQueue);
+const resultParseProcessor = new ResultParseProcessor(resultParser, artifactStore);
 const rankingRecalculateProcessor = new RankingRecalculateProcessor(rankingEngine);
 
 const experimentPlanningWorker = new Worker(
@@ -85,7 +95,7 @@ const resultPostprocessingWorker = new Worker(
 const workers = [experimentPlanningWorker, backtestExecutionWorker, resultPostprocessingWorker];
 
 async function shutdown(): Promise<void> {
-  await Promise.all(workers.map(async (worker) => worker.close()));
+  await Promise.all([...workers.map(async (worker) => worker.close()), resultPostprocessingQueue.close()]);
 }
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

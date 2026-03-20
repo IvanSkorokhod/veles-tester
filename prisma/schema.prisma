@@ -53,6 +53,7 @@ enum ArtifactType {
   NETWORK_LOG
   TRACE
   RAW_PAYLOAD
+  METRICS_JSON
 }
 
 model UserAccountSession {
@@ -173,6 +174,9 @@ model BacktestResult {
   id                    String        @id @default(cuid())
   experimentRunId       String        @unique
   success               Boolean
+  netProfit             Float?
+  tradeCount            Int?
+  maxDrawdown           Float?
   rawPayloadJson        Json
   normalizedMetricsJson Json
   parserVersion         String

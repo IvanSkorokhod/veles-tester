@@ -1,9 +1,10 @@
+import type { NormalizedBacktestMetrics } from "../results/index.js";
 import type { ArtifactType, ExperimentStatus, JobState, ParameterValue, RunStatus, TimestampedEntity } from "./common.js";
 
 export interface ParameterSpace extends TimestampedEntity {
   id: string;
   strategyTemplateId: string;
-  values: Record<string, ParameterValue[] | { min: number; max: number; step?: number }>;
+  values: Record<string, ParameterValue | ParameterValue[] | { min: number; max: number; step?: number }>;
   searchPolicy: Record<string, unknown>;
   validationSummary?: Record<string, unknown>;
 }
@@ -54,7 +55,10 @@ export interface BacktestResult {
   experimentRunId: string;
   success: boolean;
   rawPayload: Record<string, unknown>;
-  normalizedMetrics: Record<string, number | string | boolean | null>;
+  normalizedMetrics: NormalizedBacktestMetrics;
+  netProfit: number | null;
+  tradeCount: number | null;
+  maxDrawdown: number | null;
   parserVersion: string;
   parsedAt: string;
 }

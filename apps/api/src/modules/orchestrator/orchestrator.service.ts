@@ -1,4 +1,9 @@
-import { JOB_NAMES, type ExperimentCreateJobPayload, type ExperimentExpandJobPayload } from "@veles/shared";
+import {
+  JOB_NAMES,
+  type ExperimentCreateJobPayload,
+  type ExperimentExpandJobPayload,
+  type RunExecuteJobPayload
+} from "@veles/shared";
 
 import type { ApiQueues } from "../../infrastructure/queues.js";
 
@@ -14,6 +19,12 @@ export class ExperimentOrchestratorService {
   public async enqueueExperimentExpand(payload: ExperimentExpandJobPayload): Promise<void> {
     await this.queues.experimentPlanning.add(JOB_NAMES.experimentExpand, payload, {
       jobId: `${JOB_NAMES.experimentExpand}:${payload.experimentId}:${payload.stageNumber}`
+    });
+  }
+
+  public async enqueueRunExecution(payload: RunExecuteJobPayload): Promise<void> {
+    await this.queues.backtestExecution.add(JOB_NAMES.runExecute, payload, {
+      jobId: `${JOB_NAMES.runExecute}:${payload.runId}`
     });
   }
 }
