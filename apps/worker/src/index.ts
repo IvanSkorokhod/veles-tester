@@ -13,9 +13,6 @@ import { FilesystemArtifactStore } from "./modules/artifacts/filesystem-artifact
 import { DefaultRankingEngine } from "./modules/ranking/default-ranking-engine.js";
 import { DefaultResultParser } from "./modules/result-parser/default-result-parser.js";
 import { PlaywrightVelesAdapter } from "./modules/veles-adapter/index.js";
-import { assertSelectorRegistryConfigured } from "./modules/veles-adapter/veles-selector-registry.js";
-
-assertSelectorRegistryConfigured();
 
 const env = loadWorkerEnv();
 const connection = redisConnectionOptionsFromUrl(env.redisUrl);
@@ -68,7 +65,12 @@ const backtestExecutionWorker = new Worker(
   },
   {
     connection,
-    concurrency: env.workerConcurrency
+    // Browser CDP sessions are a limited resource — keep concurrency low
+    concurrency: env.backtestConcurrency,
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: { type: "exponential", delay: 5000 }
+    }
   }
 );
 
@@ -111,6 +113,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 console.log("Worker runtime started", {
   cdpUrl: env.browserCdpUrl,
   velesBaseUrl: env.velesBaseUrl,
-  concurrency: env.workerConcurrency,
+  workerConcurrency: env.workerConcurrency,
+  backtestConcurrency: env.backtestConcurrency,
   queues: Object.values(QUEUE_NAMES)
 });

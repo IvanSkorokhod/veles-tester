@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "darwin", "darwin-arm64", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -99,6 +100,8 @@ model ParameterDefinition {
   parserHintsJson        Json?
   normalizationHintsJson Json?
   strategyTemplate       StrategyTemplate @relation(fields: [strategyTemplateId], references: [id], onDelete: Cascade)
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
 
   @@unique([strategyTemplateId, key])
 }
@@ -106,6 +109,7 @@ model ParameterDefinition {
 model ParameterSpace {
   id                    String           @id @default(cuid())
   strategyTemplateId    String
+  name                  String
   spaceConfigJson       Json
   searchPolicyJson      Json
   validationSummaryJson Json?

@@ -157,6 +157,7 @@ The following items are intentionally excluded from the MVP:
 - The UI must show experiment status, run status, normalized metrics, and ranking outputs.
 - The UI must make it possible to inspect top candidates before manual validation in Veles.
 - The UI should expose enough failure detail to understand why a run failed without opening raw logs first.
+- The MVP web root should be a dashboard-oriented internal tool shell rather than a marketing or scaffold landing page.
 
 ### 7.10 Logging / Debugging
 
@@ -205,6 +206,7 @@ The following items are intentionally excluded from the MVP:
 
 - React for the web UI.
 - Shared TypeScript types between frontend and backend where practical.
+- Lightweight client-side route handling inside the web app is acceptable for the MVP until nested data workflows justify a dedicated routing dependency.
 
 ### DevOps / Local Environment
 
@@ -933,6 +935,13 @@ Conventions:
 - Reason: The immediate goal is a reliable backtest execution slice, and manual authentication is sufficient while selectors and flow details are still being confirmed.
 - Consequences: Credential env vars and login page automation are deferred, the worker now depends on `BROWSER_CDP_URL`, and local development must start Chrome/Chromium with remote debugging enabled before the worker can execute runs.
 
+### Entry 15
+
+- Date: 2026-03-20
+- Decision: The MVP web app will use a dashboard-oriented internal tool shell with lightweight client-side path routing instead of keeping the initial scaffold landing page or adding a larger routing layer immediately.
+- Reason: The immediate frontend need is a practical operator UI with stable top-level sections, while the current app only needs a handful of explicit pages and no nested data workflows yet.
+- Consequences: `apps/web` should expose real top-level pages for dashboard, templates, parameter spaces, experiments, runs, and settings, while keeping route state simple and local to the frontend boundary.
+
 ---
 
 ## 24. Open Questions
@@ -969,6 +978,7 @@ Conventions:
 - Root `.env` loading is now implemented in the API and worker apps.
 - The worker now attaches to an already authenticated Chrome/Chromium browser session through CDP and resolves an existing or newly created page inside that authenticated context.
 - The environment example now includes `BROWSER_CDP_URL`, `VELES_BASE_URL`, and optional `VELES_BACKTEST_URL` for the manual-authenticated MVP flow.
+- The web app now exposes a dashboard-oriented internal tool shell with a top header, left sidebar, root dashboard view, and real top-level pages for strategy templates, parameter spaces, experiments, runs, and settings.
 
 ### Not Done
 

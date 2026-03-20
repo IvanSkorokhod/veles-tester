@@ -11,6 +11,7 @@ export interface WorkerEnv {
   browserCdpUrl: string;
   playwrightHeadless: boolean;
   workerConcurrency: number;
+  backtestConcurrency: number;
   artifactsDir: string;
 }
 
@@ -56,7 +57,8 @@ export function loadWorkerEnv(): WorkerEnv {
     velesBacktestUrl: process.env["VELES_BACKTEST_URL"]?.trim() || undefined,
     browserCdpUrl,
     playwrightHeadless: (process.env["PLAYWRIGHT_HEADLESS"] ?? "false") === "true",
-    workerConcurrency: Number.parseInt(process.env["WORKER_CONCURRENCY"] ?? "1", 10),
+    workerConcurrency: Number.parseInt(process.env["WORKER_CONCURRENCY"] ?? "2", 10),
+    backtestConcurrency: Number.parseInt(process.env["BACKTEST_CONCURRENCY"] ?? "1", 10),
     artifactsDir: process.env["ARTIFACTS_DIR"] ?? resolve(process.cwd(), "../../artifacts")
   };
 }
