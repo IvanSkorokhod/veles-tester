@@ -7,11 +7,10 @@ export interface WorkerEnv {
   redisUrl: string;
   databaseUrl: string;
   velesBaseUrl: string;
-  velesLogin: string;
-  velesPassword: string;
+  velesBacktestUrl?: string;
+  browserCdpUrl: string;
   playwrightHeadless: boolean;
   workerConcurrency: number;
-  velesSessionStatePath: string;
   artifactsDir: string;
 }
 
@@ -39,14 +38,12 @@ export function loadWorkerEnv(): WorkerEnv {
 
   const databaseUrl = process.env["DATABASE_URL"] ?? "";
   const velesBaseUrl = process.env["VELES_BASE_URL"] ?? "";
-  const velesLogin = process.env["VELES_LOGIN"] ?? "";
-  const velesPassword = process.env["VELES_PASSWORD"] ?? "";
+  const browserCdpUrl = process.env["BROWSER_CDP_URL"] ?? "";
 
   const missingVars: string[] = [];
   if (databaseUrl.trim().length === 0) missingVars.push("DATABASE_URL");
   if (velesBaseUrl.trim().length === 0) missingVars.push("VELES_BASE_URL");
-  if (velesLogin.trim().length === 0) missingVars.push("VELES_LOGIN");
-  if (velesPassword.trim().length === 0) missingVars.push("VELES_PASSWORD");
+  if (browserCdpUrl.trim().length === 0) missingVars.push("BROWSER_CDP_URL");
 
   if (missingVars.length > 0) {
     throw new Error(`Missing required environment variables: ${missingVars.join(", ")}`);
@@ -56,12 +53,10 @@ export function loadWorkerEnv(): WorkerEnv {
     redisUrl: process.env["REDIS_URL"] ?? "redis://localhost:6379",
     databaseUrl,
     velesBaseUrl,
-    velesLogin,
-    velesPassword,
-    playwrightHeadless: (process.env["PLAYWRIGHT_HEADLESS"] ?? "true") !== "false",
+    velesBacktestUrl: process.env["VELES_BACKTEST_URL"]?.trim() || undefined,
+    browserCdpUrl,
+    playwrightHeadless: (process.env["PLAYWRIGHT_HEADLESS"] ?? "false") === "true",
     workerConcurrency: Number.parseInt(process.env["WORKER_CONCURRENCY"] ?? "1", 10),
-    velesSessionStatePath:
-      process.env["VELES_SESSION_STATE_PATH"] ?? resolve(process.cwd(), "../../artifacts/session/veles-storage-state.json"),
     artifactsDir: process.env["ARTIFACTS_DIR"] ?? resolve(process.cwd(), "../../artifacts")
   };
 }

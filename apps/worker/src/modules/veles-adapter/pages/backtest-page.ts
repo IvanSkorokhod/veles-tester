@@ -5,16 +5,14 @@ import { resolveConfiguredSelector, type VelesBacktestSelectorConfig } from "../
 
 export class VelesBacktestPage {
   public constructor(
-    private readonly page: Page,
-    private readonly baseUrl: string,
+    public readonly page: Page,
     private readonly selectors: VelesBacktestSelectorConfig
   ) {}
 
-  public async open(): Promise<void> {
-    await this.page.goto(this.buildUrl(this.selectors.backtestPath), {
+  public async open(targetUrl: string): Promise<void> {
+    await this.page.goto(targetUrl, {
       waitUntil: "domcontentloaded"
     });
-    await this.waitUntilReady();
   }
 
   public async waitUntilReady(): Promise<void> {
@@ -82,11 +80,13 @@ export class VelesBacktestPage {
     return (await metricLocator.innerText()).trim();
   }
 
-  private buildUrl(pathSegment: string): string {
-    if (this.baseUrl.trim().length === 0) {
-      throw new Error("VELES_BASE_URL must be configured before Veles automation can run.");
+  public resolveConfiguredBacktestPath(): string | undefined {
+    const path = this.selectors.backtestPath;
+
+    if (typeof path !== "string" || path.startsWith("TODO_CAPTURE_")) {
+      return undefined;
     }
 
-    return new URL(resolveConfiguredSelector("backtestPath", pathSegment), this.baseUrl).toString();
+    return path;
   }
 }

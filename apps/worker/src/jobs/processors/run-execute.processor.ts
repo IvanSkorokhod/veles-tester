@@ -1,19 +1,22 @@
 import { hostname } from "node:os";
 
 import type { Job } from "bullmq";
-import type { Prisma } from "@prisma/client";
-import { JOB_NAMES, FIXED_BACKTEST_WORKFLOW_KEY, cloneFixedBacktestParameterDefinitions, type ResultParseJobPayload, type RunExecuteJobPayload, type StrategyTemplate, type VelesBrowserAdapter } from "@veles/shared";
+import { JOB_NAMES, FIXED_BACKTEST_WORKFLOW_KEY, type ResultParseJobPayload, type RunExecuteJobPayload, type VelesBrowserAdapter } from "@veles/shared";
 import type { Queue } from "bullmq";
 
 import { prisma } from "../../infrastructure/prisma.js";
 import type { FilesystemArtifactStore } from "../../modules/artifacts/filesystem-artifact-store.js";
-import { VelesAutomationError } from "../../modules/veles-adapter/veles-automation.error.js";
-
-type StrategyTemplateRecord = Prisma.StrategyTemplateGetPayload<Record<string, never>>;
+import type { ConnectedBrowserSession } from "../../modules/veles-adapter/browser-session.connector.js";
+import type { ResolvedAuthenticatedContext } from "../../modules/veles-adapter/authenticated-context.resolver.js";
+import type { VelesBacktestPage } from "../../modules/veles-adapter/pages/backtest-page.js";
 
 export class RunExecuteProcessor {
   public constructor(
-    private readonly adapter: VelesBrowserAdapter,
+    private readonly adapter: VelesBrowserAdapter<
+      ConnectedBrowserSession,
+      ResolvedAuthenticatedContext,
+      VelesBacktestPage
+    >,
     private readonly artifactStore: FilesystemArtifactStore,
     private readonly resultPostprocessingQueue: Queue<ResultParseJobPayload>
   ) {}
@@ -73,23 +76,51 @@ export class RunExecuteProcessor {
       })
     ]);
 
+    let backtestPage: VelesBacktestPage | undefined;
+
     try {
-      const response = await this.adapter.executeBacktest({
-        runId: runRecord.id,
-        template: buildStrategyTemplate(runRecord.experiment.strategyTemplate),
-        parameterValues: job.data.parameterValues,
-        session: {
-          sessionId: "default-veles-session"
-        }
+      const session = {
+        sessionId: "default-veles-session"
+      };
+      const browserSession = await this.adapter.connectToBrowserSession(session);
+      const authenticatedContext = await this.adapter.resolveAuthenticatedContext(browserSession, session);
+
+      backtestPage = await this.adapter.openBacktestPage(authenticatedContext);
+
+      const artifacts = await this.adapter.captureArtifacts(backtestPage, runRecord.id, "before-run", {
+        screenshot: true
       });
+      await this.adapter.applyParameterValues(backtestPage, job.data.parameterValues);
+      await this.adapter.runBacktest(backtestPage);
+      await this.adapter.waitForBacktestCompletion(backtestPage);
+
+      const metrics = await this.adapter.readMetrics(backtestPage);
+      artifacts.push(
+        ...(await this.adapter.captureArtifacts(backtestPage, runRecord.id, "after-run", {
+          screenshot: true,
+          html: true
+        }))
+      );
+
+      const rawPayload = {
+        runId: runRecord.id,
+        workflowKey: runRecord.experiment.strategyTemplate.workflowKey,
+        templateKey: runRecord.experiment.strategyTemplate.templateKey,
+        templateVersion: runRecord.experiment.strategyTemplate.version,
+        pageUrl: backtestPage.page.url(),
+        capturedAt: new Date().toISOString(),
+        parameterValues: job.data.parameterValues,
+        metrics
+      };
+
       const rawPayloadArtifact = await this.artifactStore.writeJsonArtifact(
         runRecord.id,
         "raw-payload",
         "execution-payload",
-        response.rawPayload
+        rawPayload
       );
 
-      await persistArtifacts(runRecord.id, [...response.artifacts, rawPayloadArtifact]);
+      await persistArtifacts(runRecord.id, [...artifacts, rawPayloadArtifact]);
 
       await this.resultPostprocessingQueue.add(
         JOB_NAMES.resultParse,
@@ -102,8 +133,17 @@ export class RunExecuteProcessor {
         }
       );
     } catch (error) {
-      if (error instanceof VelesAutomationError) {
-        await persistArtifacts(runRecord.id, error.artifacts);
+      if (backtestPage !== undefined) {
+        const failureArtifacts = await this.adapter
+          .captureArtifacts(backtestPage, runRecord.id, "failure", {
+            screenshot: true,
+            html: true
+          })
+          .catch(() => []);
+
+        if (failureArtifacts.length > 0) {
+          await persistArtifacts(runRecord.id, failureArtifacts);
+        }
       }
 
       await prisma.$transaction([
@@ -121,7 +161,7 @@ export class RunExecuteProcessor {
           },
           data: {
             status: "FAILED",
-            failureCode: error instanceof VelesAutomationError ? "VELES_AUTOMATION_FAILED" : "RUN_EXECUTE_FAILED",
+            failureCode: "RUN_EXECUTE_FAILED",
             workerId,
             finishedAt: new Date()
           }
@@ -156,45 +196,6 @@ async function persistArtifacts(
       capturedAt: new Date()
     }))
   });
-}
-
-function buildStrategyTemplate(
-  templateRecord: StrategyTemplateRecord
-): StrategyTemplate {
-  return {
-    id: templateRecord.id,
-    templateKey: templateRecord.templateKey,
-    version: templateRecord.version,
-    displayName: templateRecord.displayName,
-    workflowKey: templateRecord.workflowKey,
-    status: mapTemplateStatus(templateRecord.status),
-    parameterDefinitions: cloneFixedBacktestParameterDefinitions(),
-    parserConfig: readOptionalJsonObject(templateRecord.parserConfigJson),
-    normalizationConfig: readOptionalJsonObject(templateRecord.normalizationConfigJson),
-    createdAt: templateRecord.createdAt.toISOString(),
-    updatedAt: templateRecord.updatedAt.toISOString()
-  };
-}
-
-function mapTemplateStatus(status: string): StrategyTemplate["status"] {
-  const statusMap: Record<string, StrategyTemplate["status"]> = {
-    DRAFT: "draft",
-    ACTIVE: "active",
-    DEPRECATED: "deprecated"
-  };
-  const mapped = statusMap[status];
-  if (mapped === undefined) {
-    throw new Error(`Unknown strategy template status from database: ${status}`);
-  }
-  return mapped;
-}
-
-function readOptionalJsonObject(value: Prisma.JsonValue | null): Record<string, unknown> | undefined {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return undefined;
-  }
-
-  return value as Record<string, unknown>;
 }
 
 function mapArtifactType(artifactType: "screenshot" | "html-snapshot" | "network-log" | "trace" | "raw-payload" | "metrics-json") {

@@ -1,7 +1,5 @@
 import type {
   AutomationSessionContext,
-  BacktestExecutionRequest,
-  BacktestExecutionResponse,
   CapturedArtifactRef,
   DiscoveryDraft,
   FixedBacktestParameterKey,
@@ -10,112 +8,59 @@ import type {
   VelesBrowserAdapter
 } from "@veles/shared";
 
-import type { Page } from "playwright";
-
 import type { FilesystemArtifactStore } from "../artifacts/filesystem-artifact-store.js";
 
+import { AuthenticatedContextResolver, type ResolvedAuthenticatedContext } from "./authenticated-context.resolver.js";
+import { CdpBrowserSessionConnector, type ConnectedBrowserSession } from "./browser-session.connector.js";
 import { VelesBacktestPage } from "./pages/backtest-page.js";
-import { VelesLoginPage } from "./pages/login-page.js";
-import { VelesSessionManager } from "./session-manager.js";
-import { VelesAutomationError } from "./veles-automation.error.js";
 import { velesSelectorRegistry } from "./veles-selector-registry.js";
 
 export interface PlaywrightVelesAdapterConfig {
   baseUrl: string;
-  login: string;
-  password: string;
-  headless: boolean;
-  sessionStatePath: string;
+  backtestUrl?: string;
+  cdpUrl: string;
   artifactStore: FilesystemArtifactStore;
 }
 
-export class PlaywrightVelesAdapter implements VelesBrowserAdapter {
-  private readonly sessionManager: VelesSessionManager;
+export class PlaywrightVelesAdapter
+  implements VelesBrowserAdapter<ConnectedBrowserSession, ResolvedAuthenticatedContext, VelesBacktestPage>
+{
+  private readonly browserSessionConnector: CdpBrowserSessionConnector;
+  private readonly authenticatedContextResolver: AuthenticatedContextResolver;
 
   public constructor(private readonly config: PlaywrightVelesAdapterConfig) {
-    this.sessionManager = new VelesSessionManager(config.headless, config.sessionStatePath);
-  }
-
-  public async ensureAuthenticatedSession(session: AutomationSessionContext): Promise<void> {
-    await this.ensureLoggedIn(session);
-  }
-
-  public async ensureLoggedIn(session: AutomationSessionContext): Promise<void> {
     this.assertRuntimeConfiguration();
-
-    await this.sessionManager.withPage(session, async ({ context, page }) => {
-      const loginPage = new VelesLoginPage(page, this.config.baseUrl, velesSelectorRegistry.fixedBacktest.login);
-
-      await loginPage.open();
-
-      if (!(await loginPage.isLoggedIn())) {
-        await loginPage.login(this.config.login, this.config.password);
-      }
-
-      await this.sessionManager.persistStorageState(context, session);
-    });
+    this.browserSessionConnector = new CdpBrowserSessionConnector(config.cdpUrl);
+    this.authenticatedContextResolver = new AuthenticatedContextResolver(config.baseUrl, config.backtestUrl);
   }
 
-  public async executeBacktest(request: BacktestExecutionRequest): Promise<BacktestExecutionResponse> {
-    this.assertRuntimeConfiguration();
-
-    return this.sessionManager.withPage(request.session, async ({ context, page }) => {
-      const loginPage = new VelesLoginPage(page, this.config.baseUrl, velesSelectorRegistry.fixedBacktest.login);
-      const backtestPage = new VelesBacktestPage(page, this.config.baseUrl, velesSelectorRegistry.fixedBacktest.backtest);
-      const artifacts: CapturedArtifactRef[] = [];
-
-      try {
-        await this.ensureLoggedInOnPage(loginPage);
-        await this.openBacktestPage(backtestPage);
-        artifacts.push(...(await this.captureArtifacts(page, request.runId, "before-run", { screenshot: true })));
-        await this.applyParameterValues(backtestPage, request.parameterValues);
-        await this.runBacktest(backtestPage);
-        await this.waitForBacktestCompletion(backtestPage);
-
-        const metrics = await this.readMetrics(backtestPage);
-
-        artifacts.push(
-          ...(await this.captureArtifacts(page, request.runId, "after-run", {
-            screenshot: true,
-            html: true
-          }))
-        );
-        await this.sessionManager.persistStorageState(context, request.session);
-
-        return {
-          rawPayload: {
-            runId: request.runId,
-            workflowKey: request.template.workflowKey,
-            templateKey: request.template.templateKey,
-            templateVersion: request.template.version,
-            pageUrl: page.url(),
-            capturedAt: new Date().toISOString(),
-            parameterValues: request.parameterValues,
-            metrics
-          },
-          artifacts
-        };
-      } catch (error) {
-        const failureArtifacts = await this.captureFailureArtifacts(page, request.runId);
-
-        throw new VelesAutomationError(
-          `Veles backtest execution failed for run ${request.runId}: ${error instanceof Error ? error.message : "Unknown error"}`,
-          [...artifacts, ...failureArtifacts],
-          error
-        );
-      }
-    });
+  public async connectToBrowserSession(session: AutomationSessionContext): Promise<ConnectedBrowserSession> {
+    return this.browserSessionConnector.connect(session);
   }
 
-  public async discoverTemplateDraft(
-    _session: AutomationSessionContext,
-    _workflowKey: string
-  ): Promise<DiscoveryDraft> {
-    throw new Error("TODO: implement manual-review-only discovery draft generation.");
+  public async resolveAuthenticatedContext(
+    browserSession: ConnectedBrowserSession,
+    session: AutomationSessionContext
+  ): Promise<ResolvedAuthenticatedContext> {
+    return this.authenticatedContextResolver.resolve(browserSession, session);
   }
 
-  public async openBacktestPage(backtestPage: VelesBacktestPage): Promise<void> {
-    await backtestPage.open();
+  public async openBacktestPage(authenticatedContext: ResolvedAuthenticatedContext): Promise<VelesBacktestPage> {
+    const backtestPage = new VelesBacktestPage(authenticatedContext.page, velesSelectorRegistry.fixedBacktest.backtest);
+    const targetUrl = this.resolveBacktestUrl(backtestPage);
+
+    try {
+      await backtestPage.open(targetUrl);
+      await backtestPage.waitUntilReady();
+
+      return backtestPage;
+    } catch (error) {
+      throw new Error(
+        `Unable to access the authenticated Veles backtest page at ${targetUrl}. Open Veles manually in the browser attached through BROWSER_CDP_URL and confirm the page-ready selector is correct. Current page URL: ${authenticatedContext.page.url()}. ${
+          error instanceof Error ? error.message : ""
+        }`.trim()
+      );
+    }
   }
 
   public async applyParameterValues(
@@ -146,7 +91,7 @@ export class PlaywrightVelesAdapter implements VelesBrowserAdapter {
   }
 
   public async captureArtifacts(
-    page: Page,
+    backtestPage: VelesBacktestPage,
     runId: string,
     stepName: string,
     options: {
@@ -157,46 +102,43 @@ export class PlaywrightVelesAdapter implements VelesBrowserAdapter {
     const artifacts: CapturedArtifactRef[] = [];
 
     if (options.screenshot === true) {
-      artifacts.push(await this.config.artifactStore.captureScreenshot(page, runId, stepName));
+      artifacts.push(await this.config.artifactStore.captureScreenshot(backtestPage.page, runId, stepName));
     }
 
     if (options.html === true) {
-      artifacts.push(await this.config.artifactStore.captureHtml(page, runId, stepName));
+      artifacts.push(await this.config.artifactStore.captureHtml(backtestPage.page, runId, stepName));
     }
 
     return artifacts;
   }
 
-  private async ensureLoggedInOnPage(loginPage: VelesLoginPage): Promise<void> {
-    await loginPage.open();
-
-    if (await loginPage.isLoggedIn()) {
-      return;
-    }
-
-    if (!(await loginPage.isLoginFormVisible())) {
-      throw new Error("The Veles login form was not detected. Capture the correct login selectors first.");
-    }
-
-    await loginPage.login(this.config.login, this.config.password);
+  public async discoverTemplateDraft(
+    _session: AutomationSessionContext,
+    _workflowKey: string
+  ): Promise<DiscoveryDraft> {
+    throw new Error("Discovery draft generation is not yet implemented. Use the Veles UI to inspect selectors manually.");
   }
 
-  private async captureFailureArtifacts(page: Page, runId: string): Promise<CapturedArtifactRef[]> {
-    try {
-      return this.captureArtifacts(page, runId, "failure", {
-        screenshot: true,
-        html: true
-      });
-    } catch {
-      return [];
+  private resolveBacktestUrl(backtestPage: VelesBacktestPage): string {
+    if (typeof this.config.backtestUrl === "string" && this.config.backtestUrl.trim().length > 0) {
+      return this.config.backtestUrl;
     }
+
+    const configuredPath = backtestPage.resolveConfiguredBacktestPath();
+
+    if (configuredPath === undefined) {
+      throw new Error(
+        "No VELES_BACKTEST_URL was configured and no fallback backtestPath exists in veles-selector-registry.ts."
+      );
+    }
+
+    return new URL(configuredPath, this.config.baseUrl).toString();
   }
 
   private assertRuntimeConfiguration(): void {
     const missingKeys = [
       this.config.baseUrl.trim().length === 0 ? "VELES_BASE_URL" : null,
-      this.config.login.trim().length === 0 ? "VELES_LOGIN" : null,
-      this.config.password.trim().length === 0 ? "VELES_PASSWORD" : null
+      this.config.cdpUrl.trim().length === 0 ? "BROWSER_CDP_URL" : null
     ].filter((value): value is string => value !== null);
 
     if (missingKeys.length > 0) {

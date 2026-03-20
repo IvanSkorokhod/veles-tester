@@ -26,10 +26,8 @@ const resultPostprocessingQueue = new Queue<ResultParseJobPayload>(QUEUE_NAMES.r
 
 const velesAdapter = new PlaywrightVelesAdapter({
   baseUrl: env.velesBaseUrl,
-  login: env.velesLogin,
-  password: env.velesPassword,
-  headless: env.playwrightHeadless,
-  sessionStatePath: env.velesSessionStatePath,
+  backtestUrl: env.velesBacktestUrl,
+  cdpUrl: env.browserCdpUrl,
   artifactStore
 });
 const resultParser = new DefaultResultParser();
@@ -94,6 +92,12 @@ const resultPostprocessingWorker = new Worker(
 
 const workers = [experimentPlanningWorker, backtestExecutionWorker, resultPostprocessingWorker];
 
+for (const worker of workers) {
+  worker.on("error", (error) => {
+    console.error(`[worker:${worker.name}] Unhandled worker error:`, error);
+  });
+}
+
 async function shutdown(): Promise<void> {
   await Promise.all([...workers.map(async (worker) => worker.close()), resultPostprocessingQueue.close()]);
 }
@@ -104,4 +108,9 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   });
 }
 
-console.log("Worker runtime started with queues:", Object.values(QUEUE_NAMES).join(", "));
+console.log("Worker runtime started", {
+  cdpUrl: env.browserCdpUrl,
+  velesBaseUrl: env.velesBaseUrl,
+  concurrency: env.workerConcurrency,
+  queues: Object.values(QUEUE_NAMES)
+});

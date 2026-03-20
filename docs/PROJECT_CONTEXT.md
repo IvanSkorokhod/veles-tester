@@ -13,7 +13,7 @@ This file is the canonical memory and single source of truth for the project.
 
 This project is a third-party application that automates backtesting on the Veles Finance web platform through the user's own account. The core reason for the project is that there is no official API for the required workflow, so the system must drive the existing web interface in a controlled and repeatable way.
 
-The product is not intended to be a generic web crawler or a universal UI bot. It is a workflow-specific automation system that knows how to log in, navigate the relevant Veles screens, apply strategy parameters through known controls, start backtests, and collect the resulting metrics. The emphasis is on deterministic behavior, reproducibility, and controlled coverage of supported strategies.
+The product is not intended to be a generic web crawler or a universal UI bot. It is a workflow-specific automation system that knows how to attach to an already authenticated browser session, navigate the relevant Veles screens, apply strategy parameters through known controls, start backtests, and collect the resulting metrics. The emphasis is on deterministic behavior, reproducibility, and controlled coverage of supported strategies.
 
 The system will use declarative strategy templates and parameter schemas to describe how a supported strategy maps to the Veles interface. Those schemas will define which controls exist, how values should be applied, what dependencies exist between parameters, and how results should be interpreted. This approach is chosen instead of blind DOM enumeration because the project needs stable automation, schema versioning, and the ability to adapt to UI changes without rewriting the entire orchestration layer.
 
@@ -59,6 +59,7 @@ In practice, this means the user selects a known supported strategy template, co
 - The system should use declarative parameter schemas.
 - The system should support future adaptation if the Veles UI changes.
 - Playwright is the required browser automation layer.
+- The MVP will assume the user authenticates to Veles manually in a browser before the worker attaches.
 - The preferred implementation stack is TypeScript, Node.js, PostgreSQL, Prisma, Redis, BullMQ, React, and Fastify for the backend framework.
 
 ---
@@ -67,8 +68,8 @@ In practice, this means the user selects a known supported strategy template, co
 
 - The first implementation will support a narrow set of Veles workflows rather than every possible strategy or page.
 - One active Veles account per deployment is acceptable for the initial version unless multi-account support is explicitly required later.
-- Session reuse through stored browser state is acceptable if it is handled securely.
-- A manual login bootstrap may be needed for the first working version before more formal credential/session flows are defined.
+- The MVP will attach to one already running Chrome/Chromium instance through CDP rather than automating credential entry.
+- The user can manually prepare an authenticated Veles tab before the worker attempts a run.
 - The Veles UI exposes enough visible information to extract the metrics needed for profitability and robustness evaluation.
 - Semi-automatic discovery output will always require manual review before it is used in production experiments.
 - Conservative worker concurrency will be necessary to avoid session instability, anti-bot triggers, or inconsistent results.
@@ -95,10 +96,9 @@ The following items are intentionally excluded from the MVP:
 
 ### 7.1 Authentication / Session Handling
 
-- The system must support logging into Veles through browser automation.
 - The system must run using the user's own Veles account context.
-- The system must persist enough session state to avoid unnecessary re-login for every run when possible.
-- The system must detect expired or invalid sessions and fail with a classified error or trigger controlled re-authentication logic.
+- The MVP must attach to an already authenticated browser session through CDP.
+- The system must detect expired, unauthenticated, or unusable attached sessions and fail clearly.
 - The system must avoid leaking credentials or session material through logs or stored artifacts.
 
 ### 7.2 Browser Automation
@@ -190,7 +190,7 @@ The following items are intentionally excluded from the MVP:
 ### Browser Automation
 
 - Playwright as the primary and required automation layer.
-- Playwright storage state for session reuse, subject to secure handling rules.
+- Playwright CDP attachment to an already running Chrome/Chromium instance for the MVP.
 
 ### Queue
 
@@ -222,7 +222,7 @@ The system should be structured as a modular application with clear boundaries b
 
 The experiment orchestrator is responsible for turning an experiment definition into staged execution work. It reads the selected strategy template and parameter space, generates candidate runs for the current stage, and queues execution jobs. It also decides when a later stage should be created, for example to refine around high-performing candidates instead of expanding the entire search space at once.
 
-The worker runtime consumes queued jobs and delegates all Veles interaction to the browser adapter. The adapter knows how to establish or restore a session, navigate to the correct UI, apply parameters defined by the template, trigger the backtest, and collect raw output. It returns a structured execution payload rather than domain decisions.
+The worker runtime consumes queued jobs and delegates all Veles interaction to the browser adapter. The adapter knows how to attach to the already running browser session, resolve an authenticated context/page, navigate to the correct UI, apply parameters defined by the template, trigger the backtest, and collect raw output. It returns a structured execution payload rather than domain decisions.
 
 The result parser normalizes raw output into a stable internal metric model, and the ranking engine computes a ranking snapshot for a given experiment or stage. The UI reads experiment, run, artifact, and ranking data from the API so the user can monitor progress and inspect the best configurations. A separate discovery module may inspect supported Veles pages and generate draft template metadata, but it is a support tool only and not part of the core execution path.
 
@@ -258,8 +258,8 @@ Must not:
 
 Responsibilities:
 
-- Launch and manage Playwright browser contexts.
-- Restore sessions or initiate login flows.
+- Manage the Playwright-side lifecycle for the selected authenticated context/page during a run.
+- Attach to an already running browser session and resolve an authenticated context/page.
 - Navigate the supported Veles workflow.
 - Apply parameters, run backtests, and collect evidence.
 
@@ -596,9 +596,10 @@ Operational notes:
 
 ### Session Reuse
 
-- Reuse Playwright storage state when possible to reduce repeated login work.
-- Validate session usability before entering a long run.
-- Detect expired or redirected sessions early and surface a controlled error.
+- For the MVP, attach to an already running Chrome/Chromium instance through CDP instead of automating login.
+- Reuse the authenticated browser profile and context that the user prepared manually.
+- Validate session usability by opening the supported backtest page and failing clearly if the page cannot be accessed.
+- Detect expired or redirected sessions early and surface a controlled error instead of attempting credential entry.
 
 ### Screenshot Capture
 
@@ -749,7 +750,7 @@ Metrics that depend on Veles output availability remain subject to confirmation.
 
 ### Phase 1: PoC
 
-- Validate login/session bootstrap.
+- Validate CDP attachment to a manually authenticated browser session.
 - Automate one supported Veles backtest flow with Playwright.
 - Extract at least a minimal set of result metrics.
 
@@ -852,7 +853,7 @@ Conventions:
 
 - Date: 2026-03-20
 - Decision: Playwright is the required browser automation technology.
-- Reason: A deterministic browser automation layer is required for login, navigation, parameter entry, and result collection.
+- Reason: A deterministic browser automation layer is required for browser attachment, navigation, parameter entry, and result collection.
 - Consequences: Browser adapter design, testing approach, and session reuse strategy will center on Playwright.
 
 ### Entry 4
@@ -925,6 +926,13 @@ Conventions:
 - Reason: The project requires declarative parameter schemas without leaking brittle Veles selectors into API, persistence, or shared domain logic.
 - Consequences: Template records remain stable across selector tweaks, while live browser connectivity still depends on manually capturing the correct Veles paths and selectors in the worker registry.
 
+### Entry 14
+
+- Date: 2026-03-20
+- Decision: The MVP will not automate Veles credential entry and will instead attach to an already authenticated Chrome/Chromium session through CDP.
+- Reason: The immediate goal is a reliable backtest execution slice, and manual authentication is sufficient while selectors and flow details are still being confirmed.
+- Consequences: Credential env vars and login page automation are deferred, the worker now depends on `BROWSER_CDP_URL`, and local development must start Chrome/Chromium with remote debugging enabled before the worker can execute runs.
+
 ---
 
 ## 24. Open Questions
@@ -932,11 +940,12 @@ Conventions:
 - What exact normalized metric set will be considered mandatory for the first ranking implementation?
 - How should profitability and robustness be weighted in the first ranking profile?
 - Will the first release support only one Veles account per deployment, or multiple isolated account sessions?
-- What is the preferred secure approach for initial session bootstrap and storage?
+- What is the preferred long-term approach for session attachment and reuse once the MVP moves beyond manually prepared authenticated browser profiles?
 - What concurrency limits are safe for one Veles account without causing instability?
 - How much template management belongs in the first UI release versus file-based management by developers?
-- What are the exact reviewed Veles selectors and path values for the first supported login page, backtest page, parameter inputs, run trigger, completion indicator, and metric fields?
+- What are the exact reviewed Veles selectors and path values for the first supported backtest page, parameter inputs, run trigger, completion indicator, and metric fields?
 - What exact text and units does the live Veles UI use for net profit, trade count, and max drawdown on the first supported page so the parser can be confirmed against reality?
+- What is the most stable authenticated-session validation signal on the live Veles backtest page once selectors are captured?
 
 ---
 
@@ -957,7 +966,9 @@ Conventions:
 - The worker now implements a real `run.execute` plus `result.parse` path for one fixed backtest workflow, including browser session handling, page-object-driven automation flow, raw payload persistence, artifact capture, metric normalization, and result persistence.
 - The first supported schema now consists of two numeric parameters only: `take_profit_percent` and `stop_loss_percent`.
 - Local filesystem artifact storage is now implemented for screenshots, HTML snapshots, raw execution payload JSON, and normalized metrics JSON.
-- Root `.env` loading is now implemented in the API and worker apps, and the environment example now includes the Veles credentials/base URL needed for live runs.
+- Root `.env` loading is now implemented in the API and worker apps.
+- The worker now attaches to an already authenticated Chrome/Chromium browser session through CDP and resolves an existing or newly created page inside that authenticated context.
+- The environment example now includes `BROWSER_CDP_URL`, `VELES_BASE_URL`, and optional `VELES_BACKTEST_URL` for the manual-authenticated MVP flow.
 
 ### Not Done
 
@@ -965,11 +976,12 @@ Conventions:
 - No staged optimization, experiment expansion, or multi-run orchestration has been implemented yet.
 - No ranking calculation or ranking snapshot workflow has been implemented yet.
 - The first live Veles selector/path set has not been captured yet, so the browser flow remains code-complete but not site-connected until those placeholders are replaced.
-- The current session handling still uses one filesystem-backed storage state path rather than a fuller persisted multi-session model.
+- No automated login flow exists in the MVP by design; the worker still depends on a manually prepared authenticated browser profile.
+- The current session handling is single-browser and single-account only; multi-account or persisted session orchestration is still future work.
 
 ### Immediate Next Step
 
-- Capture and verify the real Veles login path, backtest path, parameter input selectors, run button selector, completion indicator, and metric selectors in `apps/worker/src/modules/veles-adapter/veles-selector-registry.ts`, then execute one live run end to end against the real page.
+- Launch Chrome/Chromium with remote debugging enabled, authenticate to Veles manually in that browser profile, capture and verify the real backtest page selectors in `apps/worker/src/modules/veles-adapter/veles-selector-registry.ts`, and then execute one live run end to end through the attached CDP session.
 
 ---
 
