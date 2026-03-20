@@ -1,0 +1,21 @@
+{
+  "name": "veles-tester",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.6.0",
+  "scripts": {
+    "dev": "corepack pnpm --parallel --filter @veles/shared --filter @veles/api --filter @veles/worker --filter @veles/web run dev",
+    "build": "corepack pnpm -r --if-present build",
+    "lint": "corepack pnpm -r --if-present lint",
+    "typecheck": "corepack pnpm -r --if-present typecheck",
+    "db:up": "docker compose up -d postgres redis",
+    "db:down": "docker compose down",
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
+    "prisma:migrate:dev": "prisma migrate dev --schema prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "@prisma/client": "^6.5.0",
+    "prisma": "^6.5.0",
+    "typescript": "^5.8.2"
+  }
+}

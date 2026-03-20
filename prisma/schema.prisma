@@ -1,0 +1,215 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SessionStatus {
+  ACTIVE
+  EXPIRED
+  INVALID
+  UNKNOWN
+}
+
+enum TemplateStatus {
+  DRAFT
+  ACTIVE
+  DEPRECATED
+}
+
+enum ExperimentStatus {
+  DRAFT
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum RunStatus {
+  PENDING
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum JobState {
+  PENDING
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum ArtifactType {
+  SCREENSHOT
+  HTML_SNAPSHOT
+  NETWORK_LOG
+  TRACE
+  RAW_PAYLOAD
+}
+
+model UserAccountSession {
+  id              String        @id @default(cuid())
+  accountLabel    String
+  sessionStateRef String?
+  status          SessionStatus @default(UNKNOWN)
+  lastValidatedAt DateTime?
+  expiresAt       DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model StrategyTemplate {
+  id                      String                @id @default(cuid())
+  templateKey             String
+  version                 String
+  displayName             String
+  workflowKey             String
+  status                  TemplateStatus        @default(DRAFT)
+  parameterSchemaJson     Json
+  parserConfigJson        Json?
+  normalizationConfigJson Json?
+  parameterDefinitions    ParameterDefinition[]
+  parameterSpaces         ParameterSpace[]
+  experiments             Experiment[]
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  @@unique([templateKey, version])
+}
+
+model ParameterDefinition {
+  id                     String           @id @default(cuid())
+  strategyTemplateId     String
+  key                    String
+  label                  String
+  type                   String
+  selector               Json
+  allowedValuesJson      Json?
+  rangeConfigJson        Json?
+  dependenciesJson       Json?
+  parserHintsJson        Json?
+  normalizationHintsJson Json?
+  strategyTemplate       StrategyTemplate @relation(fields: [strategyTemplateId], references: [id], onDelete: Cascade)
+
+  @@unique([strategyTemplateId, key])
+}
+
+model ParameterSpace {
+  id                    String           @id @default(cuid())
+  strategyTemplateId    String
+  spaceConfigJson       Json
+  searchPolicyJson      Json
+  validationSummaryJson Json?
+  strategyTemplate      StrategyTemplate @relation(fields: [strategyTemplateId], references: [id], onDelete: Restrict)
+  experiments           Experiment[]
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+}
+
+model Experiment {
+  id                String           @id @default(cuid())
+  name              String
+  strategyTemplateId String
+  parameterSpaceId  String
+  status            ExperimentStatus @default(DRAFT)
+  objectiveConfigJson Json
+  rankingProfileJson Json
+  stageCount        Int              @default(0)
+  strategyTemplate  StrategyTemplate @relation(fields: [strategyTemplateId], references: [id], onDelete: Restrict)
+  parameterSpace    ParameterSpace   @relation(fields: [parameterSpaceId], references: [id], onDelete: Restrict)
+  runs              ExperimentRun[]
+  rankingSnapshots  RankingSnapshot[]
+  jobExecutions     JobExecution[]
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([status])
+}
+
+model ExperimentRun {
+  id                String        @id @default(cuid())
+  experimentId      String
+  stageNumber       Int
+  parameterHash     String
+  parameterValuesJson Json
+  status            RunStatus     @default(PENDING)
+  attemptCount      Int           @default(0)
+  failureCode       String?
+  workerId          String?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  experiment        Experiment    @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  artifacts         RunArtifact[]
+  backtestResult    BacktestResult?
+  jobExecutions     JobExecution[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@unique([experimentId, stageNumber, parameterHash])
+  @@index([status])
+}
+
+model RunArtifact {
+  id              String        @id @default(cuid())
+  experimentRunId String
+  artifactType    ArtifactType
+  storageRef      String
+  mimeType        String
+  stepName        String?
+  capturedAt      DateTime
+  experimentRun   ExperimentRun @relation(fields: [experimentRunId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+}
+
+model BacktestResult {
+  id                    String        @id @default(cuid())
+  experimentRunId       String        @unique
+  success               Boolean
+  rawPayloadJson        Json
+  normalizedMetricsJson Json
+  parserVersion         String
+  parsedAt              DateTime
+  experimentRun         ExperimentRun @relation(fields: [experimentRunId], references: [id], onDelete: Cascade)
+  createdAt             DateTime      @default(now())
+}
+
+model RankingSnapshot {
+  id                String      @id @default(cuid())
+  experimentId      String
+  stageNumber       Int
+  scoringConfigJson Json
+  filtersJson       Json?
+  rankedRunIdsJson  Json
+  scoreBreakdownJson Json
+  experiment        Experiment  @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  createdAt         DateTime    @default(now())
+}
+
+model JobExecution {
+  id              String      @id @default(cuid())
+  experimentId    String?
+  experimentRunId String?
+  queueName       String
+  jobName         String
+  state           JobState    @default(PENDING)
+  attemptNumber   Int         @default(1)
+  errorCode       String?
+  errorMessage    String?
+  enqueuedAt      DateTime?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  experiment      Experiment? @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  experimentRun   ExperimentRun? @relation(fields: [experimentRunId], references: [id], onDelete: Cascade)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([queueName, jobName, state])
+}
