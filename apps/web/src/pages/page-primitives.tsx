@@ -20,7 +20,7 @@ export interface TableColumn {
 export interface PlaceholderStatusItem {
   label: string;
   value: string;
-  tone?: "default" | "success" | "warning";
+  tone?: "default" | "success" | "warning" | "danger";
   helper: string;
 }
 
@@ -114,11 +114,13 @@ export function TablePlaceholder({
 export function PlaceholderStatusList({
   items,
   label,
-  title
+  title,
+  footer
 }: {
   items: PlaceholderStatusItem[];
   label: string;
   title: string;
+  footer?: string;
 }) {
   return (
     <div className="status-card">
@@ -137,6 +139,7 @@ export function PlaceholderStatusList({
           </article>
         ))}
       </div>
+      {footer ? <p className="status-card__footer">{footer}</p> : null}
     </div>
   );
 }

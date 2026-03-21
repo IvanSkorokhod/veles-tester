@@ -1,4 +1,8 @@
-import { MetricCard, PageLayout, PlaceholderStatusList, TablePlaceholder } from "./page-primitives.js";
+import { useEffect, useState } from "react";
+import type { BrowserSessionProbeResult } from "@veles/shared";
+
+import { loadDashboardSystemStatus, type DashboardSystemStatusSnapshot } from "../modules/system/system-status.client.js";
+import { MetricCard, PageLayout, PlaceholderStatusList, type PlaceholderStatusItem, TablePlaceholder } from "./page-primitives.js";
 
 const metrics = [
   {
@@ -25,28 +29,42 @@ const metrics = [
   }
 ];
 
-const systemStatusItems = [
-  {
-    label: "API Reachability",
-    value: "Placeholder",
-    helper: "Dev-only shell data until the web app reads live health endpoints.",
-    tone: "warning" as const
-  },
-  {
-    label: "Worker Availability",
-    value: "Placeholder",
-    helper: "Will later reflect BullMQ worker and queue visibility.",
-    tone: "warning" as const
-  },
-  {
-    label: "Browser Session",
-    value: "Placeholder",
-    helper: "Will later reflect attached CDP session status for Veles.",
-    tone: "warning" as const
-  }
-];
-
 export function DashboardPage() {
+  const [systemStatusSnapshot, setSystemStatusSnapshot] = useState<DashboardSystemStatusSnapshot | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadStatus = async () => {
+      try {
+        const snapshot = await loadDashboardSystemStatus();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setSystemStatusSnapshot(snapshot);
+        setLoadError(null);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setLoadError(error instanceof Error ? error.message : "Unable to load system status.");
+        setSystemStatusSnapshot(null);
+      }
+    };
+
+    void loadStatus();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const systemStatusModel = buildSystemStatusModel(systemStatusSnapshot, loadError);
+
   return (
     <PageLayout
       title="Dashboard"
@@ -73,10 +91,181 @@ export function DashboardPage() {
 
         <PlaceholderStatusList
           title="System Status"
-          items={systemStatusItems}
-          label="Dev Placeholder"
+          items={systemStatusModel.items}
+          label={systemStatusModel.label}
+          footer={systemStatusModel.footer}
         />
       </div>
     </PageLayout>
   );
+}
+
+function buildSystemStatusModel(
+  snapshot: DashboardSystemStatusSnapshot | null,
+  loadError: string | null
+): {
+  items: PlaceholderStatusItem[];
+  label: string;
+  footer: string;
+} {
+  if (loadError !== null) {
+    const checkedAt = new Date().toISOString();
+
+    return {
+      label: "Load Error",
+      footer: `Last checked: ${formatCheckedAt(checkedAt)}`,
+      items: [
+        {
+          label: "API Reachability",
+          value: "Unavailable",
+          helper: `The dashboard could not load system status from the backend. ${loadError}`,
+          tone: "danger"
+        },
+        {
+          label: "Worker Availability",
+          value: "Placeholder",
+          helper: "Still using placeholder development data in this MVP step.",
+          tone: "warning"
+        },
+        {
+          label: "Browser Session",
+          value: "Unavailable",
+          helper: "Live browser-session data could not be loaded because the backend probe endpoint was unreachable.",
+          tone: "danger"
+        }
+      ]
+    };
+  }
+
+  if (snapshot === null) {
+    return {
+      label: "Checking",
+      footer: "Last checked: pending initial probe",
+      items: [
+        {
+          label: "API Reachability",
+          value: "Checking",
+          helper: "Loading API health information from the backend.",
+          tone: "default"
+        },
+        {
+          label: "Worker Availability",
+          value: "Placeholder",
+          helper: "Still using placeholder development data in this MVP step.",
+          tone: "warning"
+        },
+        {
+          label: "Browser Session",
+          value: "Checking",
+          helper: "Running a read-only CDP probe against the attached browser session.",
+          tone: "default"
+        }
+      ]
+    };
+  }
+
+  const apiStatusItem: PlaceholderStatusItem =
+    snapshot.apiHealth === undefined
+      ? {
+          label: "API Reachability",
+          value: "Unavailable",
+          helper: "The API health response could not be loaded even though the dashboard rendered.",
+          tone: "danger"
+        }
+      : {
+          label: "API Reachability",
+          value: "Reachable",
+          helper: `Backend health endpoint responded with status ${snapshot.apiHealth.status}.`,
+          tone: "success"
+        };
+
+  return {
+    label: "Live Probe",
+    footer: `Last checked: ${formatCheckedAt(snapshot.checkedAt)}`,
+    items: [
+      apiStatusItem,
+      {
+        label: "Worker Availability",
+        value: "Placeholder",
+        helper: "Still using placeholder development data until a worker health endpoint is added.",
+        tone: "warning"
+      },
+      mapBrowserSessionStatusItem(snapshot.browserSession)
+    ]
+  };
+}
+
+function mapBrowserSessionStatusItem(browserSession?: BrowserSessionProbeResult): PlaceholderStatusItem {
+  if (browserSession === undefined) {
+    return {
+      label: "Browser Session",
+      value: "Unavailable",
+      helper: "The browser-session probe response could not be loaded from the backend.",
+      tone: "danger"
+    };
+  }
+
+  switch (browserSession.state) {
+    case "CDP_UNAVAILABLE":
+      return {
+        label: "Browser Session",
+        value: "CDP Unavailable",
+        helper: browserSession.message,
+        tone: "danger"
+      };
+    case "BROWSER_CONNECTED":
+      return {
+        label: "Browser Session",
+        value: "Browser Connected",
+        helper: `${browserSession.message} Contexts: ${browserSession.contextCount}. Pages: ${browserSession.pageCount}.`,
+        tone: "default"
+      };
+    case "VELES_TAB_NOT_FOUND":
+      return {
+        label: "Browser Session",
+        value: "No Veles Tab",
+        helper: `${browserSession.message} Contexts: ${browserSession.contextCount}. Pages: ${browserSession.pageCount}.`,
+        tone: "warning"
+      };
+    case "VELES_TAB_FOUND":
+      return {
+        label: "Browser Session",
+        value: "Veles Tab Found",
+        helper: buildBrowserSessionHelper(browserSession),
+        tone: "warning"
+      };
+    case "VELES_TAB_ACCESSIBLE":
+      return {
+        label: "Browser Session",
+        value: "Veles Tab Accessible",
+        helper: buildBrowserSessionHelper(browserSession),
+        tone: "success"
+      };
+    default:
+      return exhaustiveGuard(browserSession.state);
+  }
+}
+
+function buildBrowserSessionHelper(browserSession: BrowserSessionProbeResult): string {
+  const parts = [browserSession.message];
+
+  if (browserSession.velesTabTitle) {
+    parts.push(`Title: ${browserSession.velesTabTitle}.`);
+  }
+
+  if (browserSession.velesTabUrl) {
+    parts.push(`URL: ${browserSession.velesTabUrl}`);
+  }
+
+  return parts.join(" ");
+}
+
+function formatCheckedAt(checkedAt: string): string {
+  const date = new Date(checkedAt);
+
+  return Number.isNaN(date.valueOf()) ? checkedAt : date.toLocaleString();
+}
+
+function exhaustiveGuard(value: never): never {
+  throw new Error(`Unhandled browser session state: ${String(value)}`);
 }

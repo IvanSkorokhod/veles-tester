@@ -8,6 +8,7 @@ export interface ApiEnv {
   port: number;
   databaseUrl: string;
   redisUrl: string;
+  browserCdpUrl?: string;
 }
 
 let hasLoadedEnv = false;
@@ -42,6 +43,7 @@ export function loadApiEnv(): ApiEnv {
     host: process.env["API_HOST"] ?? "0.0.0.0",
     port: Number.parseInt(process.env["API_PORT"] ?? "3000", 10),
     databaseUrl,
-    redisUrl: process.env["REDIS_URL"] ?? "redis://localhost:6379"
+    redisUrl: process.env["REDIS_URL"] ?? "redis://localhost:6379",
+    browserCdpUrl: process.env["BROWSER_CDP_URL"]?.trim() || undefined
   };
 }

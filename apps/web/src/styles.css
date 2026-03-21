@@ -381,6 +381,7 @@ textarea {
 
 .status-list__helper {
   font-size: 0.92rem;
+  overflow-wrap: anywhere;
 }
 
 .status-chip {
@@ -401,6 +402,17 @@ textarea {
 .status-chip--warning {
   background: var(--warning-soft);
   color: var(--warning);
+}
+
+.status-chip--danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.status-card__footer {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
 }
 
 @media (max-width: 1120px) {

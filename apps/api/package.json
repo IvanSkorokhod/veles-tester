@@ -14,7 +14,8 @@
     "@veles/shared": "workspace:*",
     "bullmq": "^5.46.1",
     "dotenv": "^16.4.7",
-    "fastify": "^5.2.1"
+    "fastify": "^5.2.1",
+    "playwright": "^1.51.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.14",

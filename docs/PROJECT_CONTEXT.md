@@ -100,6 +100,7 @@ The following items are intentionally excluded from the MVP:
 - The MVP must attach to an already authenticated browser session through CDP.
 - The system must detect expired, unauthenticated, or unusable attached sessions and fail clearly.
 - The system must avoid leaking credentials or session material through logs or stored artifacts.
+- The system should expose a read-only browser-session probe so the UI can report whether an attached browser session currently has a Veles tab open.
 
 ### 7.2 Browser Automation
 
@@ -602,6 +603,7 @@ Operational notes:
 - Reuse the authenticated browser profile and context that the user prepared manually.
 - Validate session usability by opening the supported backtest page and failing clearly if the page cannot be accessed.
 - Detect expired or redirected sessions early and surface a controlled error instead of attempting credential entry.
+- For the MVP browser-session health check, probe the attached browser in read-only mode and return the first detected `veles.finance` tab if multiple matches are open.
 
 ### Screenshot Capture
 
@@ -942,6 +944,13 @@ Conventions:
 - Reason: The immediate frontend need is a practical operator UI with stable top-level sections, while the current app only needs a handful of explicit pages and no nested data workflows yet.
 - Consequences: `apps/web` should expose real top-level pages for dashboard, templates, parameter spaces, experiments, runs, and settings, while keeping route state simple and local to the frontend boundary.
 
+### Entry 16
+
+- Date: 2026-03-20
+- Decision: Live browser-session visibility in the MVP will come from a read-only API-side CDP probe, and the first matching `veles.finance` tab will be returned when multiple matches exist.
+- Reason: The UI needs real operator visibility into whether the manually prepared Veles browser session is available, but this step must not mutate tabs or trigger automation.
+- Consequences: The API will expose a browser-session status endpoint, shared contracts will describe the probe result, and the dashboard can replace its placeholder browser-session state with backend-driven data.
+
 ---
 
 ## 24. Open Questions
@@ -979,6 +988,7 @@ Conventions:
 - The worker now attaches to an already authenticated Chrome/Chromium browser session through CDP and resolves an existing or newly created page inside that authenticated context.
 - The environment example now includes `BROWSER_CDP_URL`, `VELES_BASE_URL`, and optional `VELES_BACKTEST_URL` for the manual-authenticated MVP flow.
 - The web app now exposes a dashboard-oriented internal tool shell with a top header, left sidebar, root dashboard view, and real top-level pages for strategy templates, parameter spaces, experiments, runs, and settings.
+- The API now exposes read-only system status endpoints for `/health` and `/system/browser-session`, and the dashboard now renders live API reachability plus backend-driven browser-session probe data instead of static placeholders for those two fields.
 
 ### Not Done
 
