@@ -1,11 +1,12 @@
 import type { Page } from "playwright";
 
-const VELES_URL_FRAGMENT = "veles.finance";
+export function isVelesTabUrl(url: string, expectedHost: string): boolean {
+  const normalizedUrl = url.trim().toLowerCase();
+  const normalizedHost = expectedHost.trim().toLowerCase();
 
-export function isVelesTabUrl(url: string): boolean {
-  return url.includes(VELES_URL_FRAGMENT);
+  return normalizedUrl.length > 0 && normalizedHost.length > 0 && normalizedUrl.includes(normalizedHost);
 }
 
-export function findFirstVelesPage(pages: Page[]): Page | undefined {
-  return pages.find((page) => isVelesTabUrl(page.url()));
+export function findFirstVelesPage(pages: Page[], expectedHost: string): Page | undefined {
+  return pages.find((page) => isVelesTabUrl(page.url(), expectedHost));
 }

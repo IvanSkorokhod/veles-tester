@@ -8,7 +8,10 @@ export class BrowserSessionProbeService {
   private browser?: Browser;
   private browserPromise?: Promise<Browser>;
 
-  public constructor(private readonly cdpUrl?: string) {}
+  public constructor(
+    private readonly cdpUrl: string | undefined,
+    private readonly expectedHost: string
+  ) {}
 
   public async probe(): Promise<BrowserSessionProbeResult> {
     const checkedAt = new Date().toISOString();
@@ -21,7 +24,8 @@ export class BrowserSessionProbeService {
         contextCount: 0,
         pageCount: 0,
         checkedAt,
-        message: "BROWSER_CDP_URL is not configured for the API process."
+        message:
+          "BROWSER_CDP_URL is not configured for the attached browser session probe. Configure a Chromium-based browser CDP endpoint. Microsoft Edge is recommended for local automation."
       };
     }
 
@@ -37,13 +41,16 @@ export class BrowserSessionProbeService {
         contextCount: 0,
         pageCount: 0,
         checkedAt,
-        message: `Unable to connect to the existing browser session at ${this.cdpUrl}. ${formatProbeErrorMessage(error)}`
+        message:
+          `Unable to connect to the attached browser session at ${this.cdpUrl}. ` +
+          `Verify that a Chromium-based browser is running with remote debugging enabled. ` +
+          `Microsoft Edge is recommended for local automation. ${formatProbeErrorMessage(error)}`
       };
     }
 
     const contexts = browser.contexts();
     const pages = contexts.flatMap((context) => context.pages());
-    const velesPage = findFirstVelesPage(pages);
+    const velesPage = findFirstVelesPage(pages, this.expectedHost);
 
     if (velesPage === undefined) {
       return {
@@ -55,8 +62,8 @@ export class BrowserSessionProbeService {
         checkedAt,
         message:
           pages.length === 0
-            ? "Connected to the browser over CDP, but no open pages were detected."
-            : "Connected to the browser, but no open tab with a veles.finance URL was found."
+            ? "Connected to the attached Chromium-based browser session, but no open pages were detected."
+            : `Connected to the attached Chromium-based browser session, but no open tab with "${this.expectedHost}" in its URL was found. Open Veles in the dedicated automation browser. Microsoft Edge is recommended for local automation.`
       };
     }
 
@@ -72,7 +79,7 @@ export class BrowserSessionProbeService {
         contextCount: contexts.length,
         pageCount: pages.length,
         checkedAt,
-        message: "A Veles tab was detected by URL, but its title could not be read safely."
+        message: "A Veles tab was detected in the attached browser session by URL, but its title could not be read safely."
       };
     }
 

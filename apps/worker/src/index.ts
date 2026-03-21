@@ -66,11 +66,7 @@ const backtestExecutionWorker = new Worker(
   {
     connection,
     // Browser CDP sessions are a limited resource — keep concurrency low
-    concurrency: env.backtestConcurrency,
-    defaultJobOptions: {
-      attempts: 3,
-      backoff: { type: "exponential", delay: 5000 }
-    }
+    concurrency: env.backtestConcurrency
   }
 );
 

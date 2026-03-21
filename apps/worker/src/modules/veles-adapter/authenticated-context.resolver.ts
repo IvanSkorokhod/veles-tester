@@ -23,7 +23,7 @@ export class AuthenticatedContextResolver {
 
     if (contexts.length === 0) {
       throw new Error(
-        "No browser contexts were exposed over CDP. Launch Chrome/Chromium with remote debugging enabled and reuse the same profile where you authenticated to Veles."
+        "No browser contexts were exposed over CDP. Launch a Chromium-based browser with remote debugging enabled, preferably Microsoft Edge for local automation, and reuse the same profile where you authenticated to Veles."
       );
     }
 
@@ -61,7 +61,7 @@ export class AuthenticatedContextResolver {
 
     console.warn(
       `[AuthenticatedContextResolver] No context contained a page matching "${preferredUrl}". ` +
-        `Falling back to the first available context. Make sure Veles is open and authenticated in the attached browser.`
+        `Falling back to the first available context. Make sure Veles is open and authenticated in the attached automation browser session.`
     );
 
     return fallbackContext;

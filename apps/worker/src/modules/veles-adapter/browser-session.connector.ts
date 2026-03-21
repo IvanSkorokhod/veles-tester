@@ -47,7 +47,7 @@ export class CdpBrowserSessionConnector {
         this.browserPromise = undefined;
 
         throw new Error(
-          `Failed to connect to the existing browser session at BROWSER_CDP_URL=${this.cdpUrl}. Launch Chrome/Chromium with remote debugging enabled and authenticate to Veles manually first. ${
+          `Failed to connect to the attached browser session at BROWSER_CDP_URL=${this.cdpUrl}. Launch a Chromium-based browser with remote debugging enabled, preferably Microsoft Edge for local automation, and authenticate to Veles manually first. ${
             error instanceof Error ? error.message : ""
           }`.trim()
         );

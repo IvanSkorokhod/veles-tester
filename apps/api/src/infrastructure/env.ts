@@ -9,6 +9,7 @@ export interface ApiEnv {
   databaseUrl: string;
   redisUrl: string;
   browserCdpUrl?: string;
+  velesExpectedHost: string;
 }
 
 let hasLoadedEnv = false;
@@ -44,6 +45,7 @@ export function loadApiEnv(): ApiEnv {
     port: Number.parseInt(process.env["API_PORT"] ?? "3000", 10),
     databaseUrl,
     redisUrl: process.env["REDIS_URL"] ?? "redis://localhost:6379",
-    browserCdpUrl: process.env["BROWSER_CDP_URL"]?.trim() || undefined
+    browserCdpUrl: process.env["BROWSER_CDP_URL"]?.trim() || undefined,
+    velesExpectedHost: process.env["VELES_EXPECTED_HOST"]?.trim() || "veles.finance"
   };
 }

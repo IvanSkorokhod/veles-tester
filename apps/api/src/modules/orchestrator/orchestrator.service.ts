@@ -24,7 +24,12 @@ export class ExperimentOrchestratorService {
 
   public async enqueueRunExecution(payload: RunExecuteJobPayload): Promise<void> {
     await this.queues.backtestExecution.add(JOB_NAMES.runExecute, payload, {
-      jobId: `${JOB_NAMES.runExecute}:${payload.runId}`
+      jobId: `${JOB_NAMES.runExecute}:${payload.runId}`,
+      attempts: 3,
+      backoff: {
+        type: "exponential",
+        delay: 5000
+      }
     });
   }
 }

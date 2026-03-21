@@ -60,6 +60,7 @@ In practice, this means the user selects a known supported strategy template, co
 - The system should support future adaptation if the Veles UI changes.
 - Playwright is the required browser automation layer.
 - The MVP will assume the user authenticates to Veles manually in a browser before the worker attaches.
+- The preferred local automation browser is Microsoft Edge, running as a dedicated Chromium-based CDP session for Veles.
 - The preferred implementation stack is TypeScript, Node.js, PostgreSQL, Prisma, Redis, BullMQ, React, and Fastify for the backend framework.
 
 ---
@@ -68,8 +69,9 @@ In practice, this means the user selects a known supported strategy template, co
 
 - The first implementation will support a narrow set of Veles workflows rather than every possible strategy or page.
 - One active Veles account per deployment is acceptable for the initial version unless multi-account support is explicitly required later.
-- The MVP will attach to one already running Chrome/Chromium instance through CDP rather than automating credential entry.
-- The user can manually prepare an authenticated Veles tab before the worker attempts a run.
+- The MVP will attach to one already running Chromium-based browser through CDP rather than automating credential entry.
+- The user can manually prepare an authenticated Veles tab in a dedicated automation browser before the worker attempts a run.
+- The dashboard and internal web UI may be opened in any browser and do not need to share the automation browser session.
 - The Veles UI exposes enough visible information to extract the metrics needed for profitability and robustness evaluation.
 - Semi-automatic discovery output will always require manual review before it is used in production experiments.
 - Conservative worker concurrency will be necessary to avoid session instability, anti-bot triggers, or inconsistent results.
@@ -192,7 +194,8 @@ The following items are intentionally excluded from the MVP:
 ### Browser Automation
 
 - Playwright as the primary and required automation layer.
-- Playwright CDP attachment to an already running Chrome/Chromium instance for the MVP.
+- Playwright CDP attachment to an already running Chromium-based automation browser for the MVP.
+- Microsoft Edge is the preferred local automation browser because it is Chromium-based and compatible with Playwright CDP workflows.
 
 ### Queue
 
@@ -599,11 +602,21 @@ Operational notes:
 
 ### Session Reuse
 
-- For the MVP, attach to an already running Chrome/Chromium instance through CDP instead of automating login.
-- Reuse the authenticated browser profile and context that the user prepared manually.
+- For the MVP, attach to an already running Chromium-based automation browser through CDP instead of automating login.
+- Reuse the authenticated browser profile and context that the user prepared manually in the dedicated automation browser.
 - Validate session usability by opening the supported backtest page and failing clearly if the page cannot be accessed.
 - Detect expired or redirected sessions early and surface a controlled error instead of attempting credential entry.
 - For the MVP browser-session health check, probe the attached browser in read-only mode and return the first detected `veles.finance` tab if multiple matches are open.
+
+### Local Development / Operator Workflow
+
+- Use Microsoft Edge as the preferred dedicated local automation browser for Veles.
+- Launch Edge with remote debugging enabled and a separate user data directory so the automation session stays isolated from everyday browsing.
+- Example macOS command:
+  `/Applications/Microsoft\ Edge.app/Contents/MacOS/Microsoft\ Edge --remote-debugging-port=9222 --user-data-dir="$HOME/.veles-tester-edge"`
+- Open and authenticate to Veles inside that dedicated Edge profile before starting real worker activity.
+- Open the dashboard in any browser the operator prefers; the dashboard does not need to run inside the automation browser.
+- Verify the Browser Session status in the dashboard before attempting live runs.
 
 ### Screenshot Capture
 
@@ -933,9 +946,9 @@ Conventions:
 ### Entry 14
 
 - Date: 2026-03-20
-- Decision: The MVP will not automate Veles credential entry and will instead attach to an already authenticated Chrome/Chromium session through CDP.
+- Decision: The MVP will not automate Veles credential entry and will instead attach to an already authenticated Chromium-based browser session through CDP.
 - Reason: The immediate goal is a reliable backtest execution slice, and manual authentication is sufficient while selectors and flow details are still being confirmed.
-- Consequences: Credential env vars and login page automation are deferred, the worker now depends on `BROWSER_CDP_URL`, and local development must start Chrome/Chromium with remote debugging enabled before the worker can execute runs.
+- Consequences: Credential env vars and login page automation are deferred, the worker now depends on `BROWSER_CDP_URL`, and local development must start a Chromium-based browser with remote debugging enabled before the worker can execute runs.
 
 ### Entry 15
 
@@ -950,6 +963,27 @@ Conventions:
 - Decision: Live browser-session visibility in the MVP will come from a read-only API-side CDP probe, and the first matching `veles.finance` tab will be returned when multiple matches exist.
 - Reason: The UI needs real operator visibility into whether the manually prepared Veles browser session is available, but this step must not mutate tabs or trigger automation.
 - Consequences: The API will expose a browser-session status endpoint, shared contracts will describe the probe result, and the dashboard can replace its placeholder browser-session state with backend-driven data.
+
+### Entry 17
+
+- Date: 2026-03-21
+- Decision: In development, API startup should treat `EADDRINUSE` on the configured port as reusable only when that port already serves a healthy Veles Tester API instance.
+- Reason: The root `pnpm dev` workflow and package-local `dev` commands may be launched while another local API watcher is already running on the same port, and that duplicate startup should not surface as a misleading failure.
+- Consequences: The API bootstrap now probes `/health` on the configured port before treating `EADDRINUSE` as fatal in development; unrelated port conflicts still fail normally.
+
+### Entry 18
+
+- Date: 2026-03-21
+- Decision: The preferred local operator workflow uses Microsoft Edge as the dedicated Chromium-based automation browser for Veles, while the dashboard may be opened in any other browser.
+- Reason: The automation session needs a stable, CDP-compatible Chromium browser without disrupting the operator's normal daily browser usage.
+- Consequences: Local documentation, UI copy, and backend/browser-session messaging should refer to an attached Chromium-based automation browser, recommend Edge for local automation, and avoid implying that the dashboard must share the same browser session.
+
+### Entry 19
+
+- Date: 2026-03-21
+- Decision: The read-only browser-session probe should match the expected Veles host through configurable environment-backed probe settings instead of hardcoding a single host string in the API.
+- Reason: The MVP already depends on environment-driven CDP attachment, and keeping the expected Veles host configurable preserves explicit boundaries without changing the execution architecture.
+- Consequences: The API now reads `VELES_EXPECTED_HOST`, the probe still returns the first matching Veles tab for the MVP, and operator messaging stays generic to attached Chromium-based browser sessions while recommending Microsoft Edge for local automation.
 
 ---
 
@@ -985,10 +1019,14 @@ Conventions:
 - The first supported schema now consists of two numeric parameters only: `take_profit_percent` and `stop_loss_percent`.
 - Local filesystem artifact storage is now implemented for screenshots, HTML snapshots, raw execution payload JSON, and normalized metrics JSON.
 - Root `.env` loading is now implemented in the API and worker apps.
-- The worker now attaches to an already authenticated Chrome/Chromium browser session through CDP and resolves an existing or newly created page inside that authenticated context.
+- The worker now attaches to an already authenticated Chromium-based browser session through CDP and resolves an existing or newly created page inside that authenticated context.
 - The environment example now includes `BROWSER_CDP_URL`, `VELES_BASE_URL`, and optional `VELES_BACKTEST_URL` for the manual-authenticated MVP flow.
 - The web app now exposes a dashboard-oriented internal tool shell with a top header, left sidebar, root dashboard view, and real top-level pages for strategy templates, parameter spaces, experiments, runs, and settings.
 - The API now exposes read-only system status endpoints for `/health` and `/system/browser-session`, and the dashboard now renders live API reachability plus backend-driven browser-session probe data instead of static placeholders for those two fields.
+- The API now allows the local Vite web app to call backend status endpoints cross-origin in development, so the dashboard can read `http://localhost:3000/health` and `http://localhost:3000/system/browser-session` directly.
+- The API dev bootstrap now detects when a healthy local API instance is already serving the configured port and skips duplicate startup in development instead of surfacing a fatal `EADDRINUSE` error.
+- The local MVP workflow is now documented around a dedicated attached Chromium-based automation browser for Veles, with Microsoft Edge as the preferred local setup and the dashboard allowed to run in any browser.
+- The browser-session probe now uses configurable `VELES_EXPECTED_HOST` matching and operator-facing messaging that refers to an attached Chromium-based browser session while recommending Microsoft Edge for local automation.
 
 ### Not Done
 
@@ -1001,7 +1039,7 @@ Conventions:
 
 ### Immediate Next Step
 
-- Launch Chrome/Chromium with remote debugging enabled, authenticate to Veles manually in that browser profile, capture and verify the real backtest page selectors in `apps/worker/src/modules/veles-adapter/veles-selector-registry.ts`, and then execute one live run end to end through the attached CDP session.
+- Launch Microsoft Edge with remote debugging enabled for the dedicated Veles automation profile, authenticate to Veles manually in that browser, capture and verify the real backtest page selectors in `apps/worker/src/modules/veles-adapter/veles-selector-registry.ts`, and then execute one live run end to end through the attached CDP session while the dashboard remains open in any browser.
 
 ---
 

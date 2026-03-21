@@ -1,3 +1,4 @@
+import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 
 import { loadApiEnv } from "./infrastructure/env.js";
@@ -18,7 +19,7 @@ export function buildApiApp(): FastifyInstance {
   const queues = createApiQueues(env.redisUrl);
   const orchestrator = new ExperimentOrchestratorService(queues);
   const verticalSliceService = new VerticalSliceService(prisma, orchestrator);
-  const browserSessionProbeService = new BrowserSessionProbeService(env.browserCdpUrl);
+  const browserSessionProbeService = new BrowserSessionProbeService(env.browserCdpUrl, env.velesExpectedHost);
   const isDev = process.env["NODE_ENV"] !== "production";
   const app = Fastify({
     logger: isDev
@@ -30,6 +31,12 @@ export function buildApiApp(): FastifyInstance {
           }
         }
       : { level: "info" }
+  });
+
+  // In production this API is accessed from the same host, so CORS is disabled.
+  // If a cross-origin production dashboard is introduced, explicit allowed origins must be configured here.
+  void app.register(cors, {
+    origin: isDev
   });
 
   app.addHook("onClose", async () => {

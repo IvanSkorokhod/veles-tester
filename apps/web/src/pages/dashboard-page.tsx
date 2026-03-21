@@ -68,7 +68,7 @@ export function DashboardPage() {
   return (
     <PageLayout
       title="Dashboard"
-      description="Operational overview for the MVP execution slice, with summary counters, recent run visibility, and local system state."
+      description="Operational overview for the MVP execution slice. The dashboard can stay open in any browser while Veles automation uses a dedicated attached Chromium-based browser session."
     >
       <section className="metrics-grid" aria-label="Summary metrics">
         {metrics.map((metric) => (
@@ -130,7 +130,7 @@ function buildSystemStatusModel(
         {
           label: "Browser Session",
           value: "Unavailable",
-          helper: "Live browser-session data could not be loaded because the backend probe endpoint was unreachable.",
+          helper: "Live attached browser-session data could not be loaded because the backend probe endpoint was unreachable.",
           tone: "danger"
         }
       ]
@@ -157,7 +157,8 @@ function buildSystemStatusModel(
         {
           label: "Browser Session",
           value: "Checking",
-          helper: "Running a read-only CDP probe against the attached browser session.",
+          helper:
+            "Running a read-only probe against the attached automation browser session. Microsoft Edge is recommended for local automation; the dashboard can remain open in any browser.",
           tone: "default"
         }
       ]
@@ -200,7 +201,7 @@ function mapBrowserSessionStatusItem(browserSession?: BrowserSessionProbeResult)
     return {
       label: "Browser Session",
       value: "Unavailable",
-      helper: "The browser-session probe response could not be loaded from the backend.",
+      helper: "The attached browser-session probe response could not be loaded from the backend.",
       tone: "danger"
     };
   }

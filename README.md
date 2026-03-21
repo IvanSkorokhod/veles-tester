@@ -52,17 +52,19 @@ corepack enable
 cp .env.example .env
 ```
 
-Set `VELES_BASE_URL` and `BROWSER_CDP_URL` in `.env` before creating real runs. Set `VELES_BACKTEST_URL` too if you want to open the backtest page directly without relying on a captured relative path in the selector registry. `PLAYWRIGHT_HEADLESS` defaults to `false`; in the current CDP-attached MVP, the browser visibility is primarily determined by how you launch Chrome/Chromium yourself.
+Set `VELES_BASE_URL` and `BROWSER_CDP_URL` in `.env` before creating real runs. Set `VELES_BACKTEST_URL` too if you want to open the backtest page directly without relying on a captured relative path in the selector registry. `VELES_EXPECTED_HOST` defaults to `veles.finance` and is used by the read-only browser-session probe. `PLAYWRIGHT_HEADLESS` defaults to `false`; in the current CDP-attached MVP, the browser visibility is primarily determined by how you launch the attached Chromium-based automation browser yourself.
 
-3. Launch Chrome or Chromium with remote debugging enabled and log into Veles manually in that browser profile:
+3. Recommended local workflow: use Microsoft Edge as the dedicated automation browser for Veles, and keep the dashboard in any browser you prefer.
+
+Launch Microsoft Edge with remote debugging enabled and a separate user data directory:
 
 ```bash
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+/Applications/Microsoft\ Edge.app/Contents/MacOS/Microsoft\ Edge \
   --remote-debugging-port=9222 \
-  --user-data-dir="$HOME/.veles-tester-chrome"
+  --user-data-dir="$HOME/.veles-tester-edge"
 ```
 
-After Chrome opens, authenticate to Veles manually and keep that browser running.
+After Edge opens, authenticate to Veles manually in that profile, open the relevant `veles.finance` page, and keep that browser running. The dashboard and internal web UI can be opened in Safari, Firefox, Chrome, or any other browser because they do not need to share the automation session.
 
 4. Start PostgreSQL and Redis:
 
@@ -95,6 +97,8 @@ This runs:
 - `@veles/worker`
 - `@veles/web`
 
+8. Open the dashboard in any browser at `http://localhost:5173` and confirm that the Browser Session status shows the attached Veles tab from the dedicated Edge automation session.
+
 ## Service Endpoints
 
 - API: `http://localhost:3000`
@@ -106,7 +110,8 @@ This runs:
 
 - The first implemented vertical slice supports one fixed backtest workflow with two numeric parameters and one queued run per experiment.
 - The worker owns browser automation concerns.
-- The MVP attaches to an already authenticated Chrome/Chromium session over CDP instead of automating credential entry.
+- The MVP attaches to an already authenticated Chromium-based browser session over CDP instead of automating credential entry.
+- Microsoft Edge is the recommended local automation browser because it is Chromium-based and works cleanly with Playwright CDP attachment, but the dashboard can be opened in any browser.
 - Veles-specific selectors are intentionally isolated under `apps/worker/src/modules/veles-adapter`.
 - Shared domain types, job payloads, and schema contracts live under `packages/shared/src`.
 - Veles selectors in `apps/worker/src/modules/veles-adapter/veles-selector-registry.ts` still require manual capture before live browser automation can succeed.
