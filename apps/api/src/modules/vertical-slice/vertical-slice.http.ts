@@ -20,6 +20,7 @@ export interface CreateStrategyTemplateInput {
 
 export interface CreateParameterSpaceInput {
   strategyTemplateId: string;
+  name: string;
   values: FixedBacktestParameterValues;
 }
 
@@ -48,6 +49,7 @@ export function readCreateParameterSpaceBody(body: unknown): CreateParameterSpac
 
   return {
     strategyTemplateId: readRequiredString(record, "strategyTemplateId"),
+    name: readOptionalString(record, "name") ?? "Fixed Backtest Parameter Space",
     values: readFixedBacktestValues(record["values"])
   };
 }
@@ -139,6 +141,20 @@ function readRequiredString(record: Record<string, unknown>, key: string): strin
 
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new ApiRouteError(400, `\`${key}\` must be a non-empty string.`);
+  }
+
+  return value.trim();
+}
+
+function readOptionalString(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new ApiRouteError(400, `\`${key}\` must be a non-empty string when provided.`);
   }
 
   return value.trim();

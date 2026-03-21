@@ -4,6 +4,7 @@ import type { ArtifactType, ExperimentStatus, JobState, ParameterValue, RunStatu
 export interface ParameterSpace extends TimestampedEntity {
   id: string;
   strategyTemplateId: string;
+  name: string;
   values: Record<string, ParameterValue | ParameterValue[] | { min: number; max: number; step?: number }>;
   searchPolicy: Record<string, unknown>;
   validationSummary?: Record<string, unknown>;

@@ -5,6 +5,17 @@ import type { VerticalSliceService } from "../vertical-slice/vertical-slice.serv
 
 export function buildRunRoutes(service: VerticalSliceService): FastifyPluginAsync {
   return async (app) => {
+    app.get("/runs/summary", async (request, reply) => {
+      try {
+        const query = readListRunsQuery(request.query);
+        const summary = await service.summarizeRuns(query);
+
+        return reply.code(200).send(summary);
+      } catch (error) {
+        return sendRouteError(reply, error);
+      }
+    });
+
     app.get("/runs", async (request, reply) => {
       try {
         const query = readListRunsQuery(request.query);

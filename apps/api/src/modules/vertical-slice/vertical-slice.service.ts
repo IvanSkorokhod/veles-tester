@@ -5,7 +5,9 @@ import {
   FIXED_BACKTEST_PARAMETER_DEFINITIONS,
   FIXED_BACKTEST_PARSER_VERSION,
   FIXED_BACKTEST_WORKFLOW_KEY,
+  buildRunAnalyticsSnapshot,
   cloneFixedBacktestParameterDefinitions,
+  type RunAnalyticsSnapshot,
   type BacktestResult as SharedBacktestResult,
   type Experiment as SharedExperiment,
   type ExperimentRun as SharedExperimentRun,
@@ -128,6 +130,7 @@ export class VerticalSliceService {
     const createdParameterSpace = await this.prisma.parameterSpace.create({
       data: {
         strategyTemplateId: strategyTemplate.id,
+        name: input.name,
         spaceConfigJson: toPrismaJson(values),
         searchPolicyJson: {
           mode: "single-run"
@@ -289,6 +292,36 @@ export class VerticalSliceService {
     }));
   }
 
+  public async summarizeRuns(query: ListRunsQuery): Promise<RunAnalyticsSnapshot> {
+    const runRecords = await this.prisma.experimentRun.findMany({
+      where: query.experimentId
+        ? {
+            experimentId: query.experimentId
+          }
+        : undefined,
+      include: {
+        backtestResult: true
+      },
+      orderBy: {
+        createdAt: "asc"
+      }
+    });
+
+    return buildRunAnalyticsSnapshot(
+      runRecords.map((runRecord) => ({
+        runId: runRecord.id,
+        status: mapRunStatus(runRecord.status),
+        occurredAt:
+          runRecord.finishedAt?.toISOString() ??
+          runRecord.startedAt?.toISOString() ??
+          runRecord.createdAt.toISOString(),
+        netProfit: runRecord.backtestResult?.netProfit ?? null,
+        tradeCount: runRecord.backtestResult?.tradeCount ?? null,
+        maxDrawdown: runRecord.backtestResult?.maxDrawdown ?? null
+      }))
+    );
+  }
+
   public async getRunDetails(runId: string): Promise<{
     run: SharedExperimentRun;
     experiment: SharedExperiment;
@@ -352,6 +385,7 @@ function mapParameterSpace(record: ParameterSpaceRecord): SharedParameterSpace {
   return {
     id: record.id,
     strategyTemplateId: record.strategyTemplateId,
+    name: record.name,
     values: toParameterSpaceValues(readStoredFixedBacktestValues(record.spaceConfigJson)),
     searchPolicy: readJsonObject(record.searchPolicyJson),
     validationSummary: readOptionalJsonObject(record.validationSummaryJson),

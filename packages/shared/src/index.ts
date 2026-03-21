@@ -1,3 +1,4 @@
+export * from "./analytics/index.js";
 export * from "./automation/index.js";
 export * from "./domain/index.js";
 export * from "./jobs/index.js";

@@ -985,9 +985,73 @@ Conventions:
 - Reason: The MVP already depends on environment-driven CDP attachment, and keeping the expected Veles host configurable preserves explicit boundaries without changing the execution architecture.
 - Consequences: The API now reads `VELES_EXPECTED_HOST`, the probe still returns the first matching Veles tab for the MVP, and operator messaging stays generic to attached Chromium-based browser sessions while recommending Microsoft Edge for local automation.
 
+### Entry 20
+
+- Date: 2026-03-21
+- Decision: The first donor-derived implementation slice from `de-don/veles-tools` will be a run aggregation read model rather than live bot/backtest fetching or extension-style launch orchestration.
+- Reason: The donor's aggregation logic ports cleanly as shared analytics over persisted `ExperimentRun` and `BacktestResult` records, while donor transport and launch flows depend heavily on extension-only assumptions that do not fit this architecture.
+- Consequences: Shared run-analytics utilities, `/api/runs/summary`, and a real Runs page now exist as the first donor-adapted slice, while live bot/backtest listing and multi-launch orchestration remain future ports that must be rewritten against API/worker boundaries.
+
 ---
 
-## 24. Open Questions
+## 24. Donor Baseline: de-don/veles-tools
+
+The existing repository `de-don/veles-tools` is a donor codebase and functional baseline, not a target architecture. It demonstrates a working Veles-oriented operator workflow that already includes multi-launch backtests, backtest list handling, aggregation/statistics, and practical Bots/Backtests UI sections.
+
+The current project must reuse the useful business logic and workflow patterns from that donor while keeping this repository's existing architecture intact: Fastify API, BullMQ workers, Prisma persistence, Playwright browser automation, and React web UI.
+
+### Donor Concepts To Reuse
+
+- Veles-oriented list workflows for bots and backtests, including pragmatic filtering, pagination, and operator-facing table patterns.
+- Backtest aggregation/statistics logic, especially reusable pure calculations such as portfolio-like rollups, drawdown handling, and summary-card metrics.
+- Queue and progress concepts from the donor's multi-launch backtest workflow, but only as orchestration ideas to map into BullMQ jobs and worker-owned execution.
+- UI interaction patterns that help operators manage selections, summaries, tables, and status-driven workflows.
+- Storage abstraction ideas where they express a cache boundary or user preference boundary clearly.
+- Utility functions for formatting, analytics, table behavior, and durable view-state handling where they are not tied to extension-only APIs.
+
+### Donor Parts We Do Not Copy Directly
+
+- Browser extension shell, popup flow, manifest wiring, Chrome extension messaging, or any architecture centered on extension runtime APIs.
+- Direct donor API transport assumptions that rely on extension-side credential proxying against undocumented Veles endpoints.
+- Browser-local persistence as the primary system of record. This project keeps Prisma/PostgreSQL as the source of truth.
+- Donor component structure or naming when it conflicts with the current module boundaries and conventions of this repository.
+
+### Donor Mapping Into This Architecture
+
+- Donor API clients map into worker-owned Veles adapter modules or API-side service modules only when the underlying behavior fits the current transport boundary.
+- Donor backtest launcher queue concepts map into the experiment orchestrator and BullMQ job model rather than staying inside the UI layer.
+- Donor aggregation/statistics logic maps into shared analytics utilities, result-parser-adjacent services, and API summary endpoints.
+- Donor UI workflows map into the web app pages and modules, using the current dashboard-shell structure rather than extension-specific navigation.
+- Donor browser-local caches and preference stores map either to server-side persistence, API-facing derived read models, or lightweight web-local UI preferences depending on responsibility.
+
+### Adapt Vs Rewrite Guidance
+
+- Pure analytics and formatting logic should be adapted where it remains useful after renaming and boundary cleanup.
+- Transport, authentication, persistence, and execution flow logic should usually be rewritten against this repository's explicit layers.
+- Extension-only integration points must be treated as reference behavior, not portable implementation.
+
+### First Porting Priority
+
+- The first donor-adapted slice should focus on backtest aggregation/statistics because it provides fast value inside the current architecture and can be implemented as shared domain logic plus API/UI read models without introducing extension-specific transport.
+- Bot/backtest listing against live Veles sources remains useful as a future port, but it depends more heavily on donor extension transport behavior and should be adapted only after the worker/API boundaries for read-side fetching are decided explicitly.
+
+### Current Donor Port Status
+
+- The first donor-adapted slice is now the run aggregation read model: shared analytics for persisted runs, an API summary endpoint, and a real Runs page that consumes those summaries.
+- This slice adapts the donor's backtest-statistics concepts, but it intentionally runs on persisted `ExperimentRun` and `BacktestResult` records instead of extension-local backtest caches.
+
+### Donor Migration Checklist
+
+- Completed: port donor-style run/backtest summary aggregation into shared analytics plus API read endpoints.
+- Completed: port a practical donor-inspired Runs table and summary workflow into the web UI using the current route/page structure.
+- Pending: introduce experiment- or run-level grouping and saved selection concepts where they fit current persistence.
+- Pending: adapt donor backtest launcher concepts into BullMQ-friendly staged run orchestration.
+- Pending: evaluate donor caching and preference-store patterns and keep only the abstractions that still make sense without extension storage APIs.
+- Pending: review donor utility functions for generic table, formatting, and analytics helpers that can be moved safely into shared or web-local modules.
+
+---
+
+## 25. Open Questions
 
 - What exact normalized metric set will be considered mandatory for the first ranking implementation?
 - How should profitability and robustness be weighted in the first ranking profile?
@@ -1001,7 +1065,7 @@ Conventions:
 
 ---
 
-## 25. Current Implementation Status
+## 26. Current Implementation Status
 
 ### Done
 
@@ -1027,6 +1091,9 @@ Conventions:
 - The API dev bootstrap now detects when a healthy local API instance is already serving the configured port and skips duplicate startup in development instead of surfacing a fatal `EADDRINUSE` error.
 - The local MVP workflow is now documented around a dedicated attached Chromium-based automation browser for Veles, with Microsoft Edge as the preferred local setup and the dashboard allowed to run in any browser.
 - The browser-session probe now uses configurable `VELES_EXPECTED_HOST` matching and operator-facing messaging that refers to an attached Chromium-based browser session while recommending Microsoft Edge for local automation.
+- The donor repository `de-don/veles-tools` is now explicitly documented as a donor baseline for reusable business logic, data-flow ideas, and UI patterns, without replacing the current application architecture.
+- The first donor-adapted slice is now implemented as shared run aggregation analytics, an API summary endpoint for runs, and a real Runs page that renders donor-inspired summary metrics plus a persisted run table.
+- The local development database has now been migrated with the first vertical-slice Prisma migration, so run- and experiment-backed API reads can execute against real tables.
 
 ### Not Done
 
@@ -1036,6 +1103,8 @@ Conventions:
 - The first live Veles selector/path set has not been captured yet, so the browser flow remains code-complete but not site-connected until those placeholders are replaced.
 - No automated login flow exists in the MVP by design; the worker still depends on a manually prepared authenticated browser profile.
 - The current session handling is single-browser and single-account only; multi-account or persisted session orchestration is still future work.
+- No donor-derived live bot/backtest fetching workflow has been adapted into the current app yet.
+- No donor-derived multi-launch backtest orchestration has been adapted into BullMQ/worker execution yet.
 
 ### Immediate Next Step
 
@@ -1043,7 +1112,7 @@ Conventions:
 
 ---
 
-## 26. Rules for Maintaining This Document
+## 27. Rules for Maintaining This Document
 
 - Update this file before major implementation changes.
 - Never contradict this file silently.
