@@ -12,6 +12,9 @@ import { buildParameterSpaceRoutes } from "./modules/parameter-spaces/parameter-
 import { buildRunRoutes } from "./modules/runs/run.routes.js";
 import { buildStrategyTemplateRoutes } from "./modules/strategy-templates/strategy-template.routes.js";
 import { buildSystemRoutes } from "./modules/system/system.routes.js";
+import { buildVelesBotsRoutes } from "./modules/veles-bots/veles-bots.routes.js";
+import { VelesBotsService } from "./modules/veles-bots/veles-bots.service.js";
+import { AttachedBrowserSessionService } from "./modules/veles/attached-browser-session.service.js";
 import { VerticalSliceService } from "./modules/vertical-slice/vertical-slice.service.js";
 
 export function buildApiApp(): FastifyInstance {
@@ -20,6 +23,8 @@ export function buildApiApp(): FastifyInstance {
   const orchestrator = new ExperimentOrchestratorService(queues);
   const verticalSliceService = new VerticalSliceService(prisma, orchestrator);
   const browserSessionProbeService = new BrowserSessionProbeService(env.browserCdpUrl, env.velesExpectedHost);
+  const attachedBrowserSessionService = new AttachedBrowserSessionService(env.browserCdpUrl, env.velesExpectedHost);
+  const velesBotsService = new VelesBotsService(attachedBrowserSessionService);
   const isDev = process.env["NODE_ENV"] !== "production";
   const app = Fastify({
     logger: isDev
@@ -49,6 +54,7 @@ export function buildApiApp(): FastifyInstance {
   void app.register(buildParameterSpaceRoutes(verticalSliceService), { prefix: "/api" });
   void app.register(buildExperimentRoutes(verticalSliceService), { prefix: "/api" });
   void app.register(buildRunRoutes(verticalSliceService), { prefix: "/api" });
+  void app.register(buildVelesBotsRoutes(velesBotsService), { prefix: "/api" });
   void app.register(discoveryRoutes, { prefix: "/api" });
 
   return app;
